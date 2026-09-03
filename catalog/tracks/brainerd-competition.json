@@ -1,0 +1,11 @@
+{
+  "id": "brainerd-competition",
+  "displayName": "Brainerd — Competition",
+  "folder": "gb_brainerd",
+  "layout": "competition",
+  "maxClients": 16,
+  "cars": ["abarth_124_2016", "tbb_toyota_gr86_premium", "pc_civic", "ks_mazda_miata", "lotus_elise_sc", "bmw_m3_e30"],
+  "legalTyres": "ST;SM;RT6;E;SV;S;M;H",
+  "source": "https://www.overtake.gg/downloads/brainerd-international-raceway.42674/",
+  "notes": "GutBomb 1.1. 2.5 mi / 16 pits. Install the OverTake zip via Content Manager so content/tracks/gb_brainerd exists, then run sync_content.py --track brainerd-competition."
+}

@@ -1,0 +1,10 @@
+{
+  "lobbies": [
+    {
+      "id": "dev-blackhawk",
+      "track": "blackhawk",
+      "name": "[DEV] Practice — Blackhawk Farms",
+      "slot": 8
+    }
+  ]
+}

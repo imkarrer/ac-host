@@ -1,0 +1,106 @@
+name: ac-host
+
+services:
+  auth:
+    build:
+      context: ../sidecar
+    image: ac-host-auth:latest
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      AUTH_BIND: ${AUTH_BIND:-127.0.0.1:18080}
+      AUTH_OPEN: ${AUTH_OPEN:-1}
+      AUTH_REQUIRED_ROLE: ${AUTH_REQUIRED_ROLE:-ac-practice}
+      WHITELIST_PATH: /data/whitelist.json
+    volumes:
+      - ${AC_STATE:?set AC_STATE}:/data
+
+  # Image used by `python scripts/acctl.py up-static` for each catalog/statics.json lobby.
+  # Not started by `compose up` itself — each lobby is its own container and port.
+  static:
+    build:
+      context: ../image
+    image: ac-host-server:latest
+    network_mode: host
+    profiles: ["build"]
+    environment:
+      STEAMCMD_LOGIN: ${STEAMCMD_LOGIN:-anonymous}
+      AC_CFG_DIR: /cfg
+      AC_CONTENT: /content
+      AC_RESULTS_DIR: /results
+    volumes:
+      - ac-server:/opt/ac
+      - steam:/home/ac/Steam
+      - ${AC_CONTENT:?set AC_CONTENT}:/content:ro
+
+  # Template image for `python scripts/acctl.py start-race`.
+  # Not started by `compose up`.
+  race:
+    image: ac-host-server:latest
+    network_mode: host
+    profiles: ["race"]
+    environment:
+      STEAMCMD_LOGIN: ${STEAMCMD_LOGIN:-anonymous}
+      AC_CFG_DIR: /cfg
+      AC_CONTENT: /content
+      AC_RESULTS_DIR: /results
+    volumes:
+      - ac-server:/opt/ac
+      - steam:/home/ac/Steam
+      - ${AC_CONTENT}:/content:ro
+
+  # Content Manager /api/details so Online shows liveries (server name ends with ℹport).
+  details:
+    build:
+      context: ../sidecar
+    image: ac-host-auth:latest
+    network_mode: host
+    restart: unless-stopped
+    command: ["python", "-u", "/app/details.py"]
+    environment:
+      AC_STATE: /data
+      AC_CONTENT: /content
+      AC_PAGES_URL: ${AC_PAGES_URL:-}
+    volumes:
+      - ${AC_STATE:?set AC_STATE}:/data:ro
+      - ${AC_CONTENT:?set AC_CONTENT}:/content:ro
+
+  # UDP plugin: LAP_COMPLETED → state/leaderboard.json; optional push to GitHub Pages repo
+  plugin:
+    build:
+      context: ../sidecar
+    image: ac-host-auth:latest
+    network_mode: host
+    restart: unless-stopped
+    command: ["python", "-u", "/app/plugin.py"]
+    environment:
+      AC_STATE: /data
+      AC_CATALOG: /catalog
+      AC_CATALOG_STATICS: ${AC_CATALOG_STATICS:-statics.json}
+      PLUGIN_SLOTS: ${PLUGIN_SLOTS:-}
+      AC_DIST: /data/dist
+      PLUGIN_HOST: 127.0.0.1
+      GITHUB_STATUS_TOKEN: ${GITHUB_STATUS_TOKEN:-}
+      GITHUB_STATUS_REPO: ${GITHUB_STATUS_REPO:-}
+      GITHUB_STATUS_BRANCH: ${GITHUB_STATUS_BRANCH:-main}
+      GITHUB_STATUS_PATH: ${GITHUB_STATUS_PATH:-leaderboard.json}
+    volumes:
+      - ${AC_STATE:?set AC_STATE}:/data
+      - ../catalog:/catalog:ro
+
+  bot:
+    build:
+      context: ../bot
+    image: ac-host-bot:latest
+    profiles: ["bot"]
+    restart: unless-stopped
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:-}
+      DISCORD_REQUIRED_ROLE: ${AUTH_REQUIRED_ROLE:-ac-practice}
+      WHITELIST_PATH: /data/whitelist.json
+    volumes:
+      - ${AC_STATE}:/data
+
+volumes:
+  ac-server:
+  steam:

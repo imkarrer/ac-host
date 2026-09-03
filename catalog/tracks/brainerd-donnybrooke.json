@@ -1,0 +1,11 @@
+{
+  "id": "brainerd-donnybrooke",
+  "displayName": "Brainerd — Donnybrooke",
+  "folder": "gb_brainerd",
+  "layout": "donnybrooke",
+  "maxClients": 24,
+  "cars": ["abarth_124_2016", "tbb_toyota_gr86_premium", "pc_civic", "ks_mazda_miata", "lotus_elise_sc", "bmw_m3_e30"],
+  "legalTyres": "ST;SM;RT6;E;SV;S;M;H",
+  "source": "https://www.overtake.gg/downloads/brainerd-international-raceway.42674/",
+  "notes": "GutBomb 1.1. 3.1 mi / 30 pits on the track; 24 clients is the practice default. Same folder as brainerd-competition. Historic 1968 layout is layout=historic if you want it later."
+}

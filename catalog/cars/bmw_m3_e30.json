@@ -1,0 +1,7 @@
+{
+  "id": "bmw_m3_e30",
+  "displayName": "BMW M3 E30",
+  "folder": "bmw_m3_e30",
+  "legalTyres": ["SV", "ST", "SM"],
+  "notes": "Base game. Points-series spec. Do not pack a zip; joiners already have it."
+}

@@ -1,0 +1,12 @@
+{
+  "id": "abarth_124_2016",
+  "displayName": "Abarth 124 Spider EC P1",
+  "folder": "abarth_124_2016",
+  "legalTyres": [
+    "ST",
+    "SM",
+    "RT6"
+  ],
+  "source": "",
+  "notes": "Patched Kunos DLC. Set AC_124_RELEASE_URL or AC_GITHUB_* in .env; render_site / publish_124 fill the URL. Folder name is the ACD key."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "ks_mazda_miata",
+  "displayName": "Mazda Miata NA",
+  "folder": "ks_mazda_miata",
+  "legalTyres": ["SV", "ST"],
+  "notes": "Base game (update 1.13). Do not pack a zip; joiners already have it."
+}

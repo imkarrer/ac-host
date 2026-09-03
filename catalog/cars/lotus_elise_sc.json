@@ -1,0 +1,7 @@
+{
+  "id": "lotus_elise_sc",
+  "displayName": "Lotus Elise SC",
+  "folder": "lotus_elise_sc",
+  "legalTyres": ["ST", "SM"],
+  "notes": "Base game. Do not pack a zip; joiners already have it."
+}

@@ -1,0 +1,22 @@
+{
+  "lobbies": [
+    {
+      "id": "blackhawk",
+      "track": "blackhawk",
+      "name": "Practice — Blackhawk Farms",
+      "slot": 0
+    },
+    {
+      "id": "brainerd-competition",
+      "track": "brainerd-competition",
+      "name": "Practice — Brainerd Competition",
+      "slot": 1
+    },
+    {
+      "id": "brainerd-donnybrooke",
+      "track": "brainerd-donnybrooke",
+      "name": "Practice — Brainerd Donnybrooke",
+      "slot": 2
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+# On the NixOS box, replace hosts/ac-box/hardware-configuration.nix with:
+#
+#   nixos-generate-config --show-hardware-config > hardware-configuration.nix
+#
+# This stub only lets the flake evaluate. It will not boot a real machine.
+{ modulesPath, ... }:
+
+{
+  imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
+
+  fileSystems."/" = {
+    device = "/dev/disk/by-label/nixos";
+    fsType = "ext4";
+  };
+
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;
+}

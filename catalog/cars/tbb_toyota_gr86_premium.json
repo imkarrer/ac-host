@@ -1,0 +1,9 @@
+{
+  "id": "tbb_toyota_gr86_premium",
+  "displayName": "Toyota GR86 Premium",
+  "folder": "tbb_toyota_gr86_premium",
+  "legalTyres": ["ST", "SM", "E"],
+  "requiresCsp": true,
+  "source": "https://www.assettoworld.com/car/toyota-gr86-premium",
+  "notes": "Jugee8 / VR Driving 2.0.1 from AssettoWorld (unpatched). Folder name is the ACD key — do not rename. Custom Shaders Patch required."
+}

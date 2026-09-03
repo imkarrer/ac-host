@@ -1,0 +1,11 @@
+{
+  "id": "blackhawk",
+  "displayName": "Blackhawk Farms",
+  "folder": "slipangle_ggt",
+  "layout": "",
+  "maxClients": 24,
+  "cars": ["abarth_124_2016", "tbb_toyota_gr86_premium", "pc_civic", "ks_mazda_miata", "lotus_elise_sc", "bmw_m3_e30"],
+  "legalTyres": "ST;SM;RT6;E;SV;S;M;H",
+  "source": "https://www.overtake.gg/downloads/gray-ghost-trail.80813/",
+  "notes": "Gray Ghost Trail (slipangle_ggt). 44 pit boxes on the track; 24 clients is the practice default. 124, GR86, Civic FK8, NA Miata, Elise SC, E30."
+}

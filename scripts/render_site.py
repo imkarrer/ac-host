@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Fill site templates from environment / .env into an output directory.
+
+Committed `site/` keeps `__AC_*__` placeholders. Default output is `dist/site`
+(gitignored). Push that tree (or copy into your Pages repo) after render.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "scripts"))
+import settings  # noqa: E402
+
+
+def load_dotenv(path: Path) -> None:
+    if not path.is_file():
+        return
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+def load_env_files() -> None:
+    state = os.environ.get("AC_STATE", "").strip()
+    candidates = []
+    if state:
+        candidates.append(Path(state) / ".env")
+    candidates.extend([REPO / ".env", REPO / "compose" / ".env"])
+    for path in candidates:
+        load_dotenv(path)
+
+
+def substitute(text: str) -> str:
+    mapping = {
+        "__AC_PUBLIC_IP__": settings.public_ip(),
+        "__AC_GITHUB_OWNER__": settings.github_owner(),
+        "__AC_GITHUB_REPO__": settings.github_pages_repo(),
+        "__AC_PAGES_URL__": settings.pages_url().rstrip("/"),
+        "__AC_124_RELEASE_URL__": settings.release_124_url(),
+        "__AC_JOIN_8081__": settings.join_url(8081),
+        "__AC_JOIN_8082__": settings.join_url(8082),
+        "__AC_JOIN_8083__": settings.join_url(8083),
+        "__AC_JOIN_8089__": settings.join_url(8089),
+    }
+    for key, value in mapping.items():
+        text = text.replace(key, value)
+    return text
+
+
+def write_content_json(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "cars": {
+            "abarth_124_2016": {
+                "url": settings.release_124_url(),
+                "version": "1.3",
+            }
+        }
+    }
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {path}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=REPO / "dist" / "site",
+        help="Rendered output directory (default: dist/site)",
+    )
+    parser.add_argument(
+        "--in-place",
+        action="store_true",
+        help="Overwrite site/ templates (avoid for commits; use for Pages-only trees)",
+    )
+    args = parser.parse_args()
+    load_env_files()
+
+    src = REPO / "site"
+    out = src if args.in_place else args.out
+    if not args.in_place:
+        if out.exists():
+            shutil.rmtree(out)
+        shutil.copytree(
+            src,
+            out,
+            ignore=shutil.ignore_patterns(".git", "*.pyc", "__pycache__"),
+        )
+
+    for rel in ("index.html", "dev/index.html", "README.md"):
+        path = out / rel
+        if not path.is_file():
+            continue
+        path.write_text(substitute(path.read_text(encoding="utf-8")), encoding="utf-8")
+        print(f"wrote {path}")
+
+    write_content_json(out / "content.json")
+    write_content_json(out / "dev" / "content.json")
+
+    if not args.in_place:
+        car = REPO / "catalog" / "cars" / "abarth_124_2016.json"
+        if car.is_file():
+            data = json.loads(car.read_text(encoding="utf-8"))
+            data["source"] = settings.release_124_url()
+            rendered = out / "catalog" / "abarth_124_2016.json"
+            rendered.parent.mkdir(parents=True, exist_ok=True)
+            rendered.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            print(f"wrote {rendered}")
+
+
+if __name__ == "__main__":
+    main()

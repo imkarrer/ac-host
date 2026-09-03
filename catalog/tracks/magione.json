@@ -1,0 +1,9 @@
+{
+  "id": "magione",
+  "displayName": "Magione",
+  "folder": "magione",
+  "layout": "",
+  "maxClients": 18,
+  "cars": ["bmw_m3_e30"],
+  "notes": "Stock-track LAN smoke test. Content already exists under the game server/ folder."
+}

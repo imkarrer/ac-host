@@ -1,0 +1,9 @@
+{
+  "id": "pc_civic",
+  "displayName": "Honda Civic Type-R (FK8)",
+  "folder": "pc_civic",
+  "legalTyres": ["S", "M", "H"],
+  "requiresCsp": true,
+  "source": "https://www.assettoworld.com/car/honda-civic-type-r-fk8-5",
+  "notes": "polycode / assettoland 1.02. Folder name is the ACD key — do not rename. Custom Shaders Patch required."
+}
