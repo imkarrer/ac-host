@@ -230,28 +230,18 @@ def dist_dir() -> Path:
 
 
 def sync_site_content() -> None:
-    """Write 124-only content.json into state/dist for the CM details sidecar.
+    """Write cars + practice tracks into state/dist for the CM details sidecar.
 
-    Prefer the version already in dist/content.json (from publish_124), then
-    ui_car.json on the content tree. Never hardcode an old version.
+    Prefer the 124 version already in dist/content.json (from publish_124), then
+    ui_car.json on the content tree. Never hardcode an old 124 version.
     """
     dest = dist_dir()
     dest.mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, str(REPO / "scripts"))
     import settings
+    from content_manifest import existing_car_version, write_content_json
 
-    version = None
-    existing = dest / "content.json"
-    if existing.is_file():
-        try:
-            version = (
-                json.loads(existing.read_text(encoding="utf-8"))
-                .get("cars", {})
-                .get("abarth_124_2016", {})
-                .get("version")
-            )
-        except json.JSONDecodeError:
-            version = None
+    version = existing_car_version(dest / "content.json")
     if not version:
         ui_car = content_dir() / "cars" / "abarth_124_2016" / "ui" / "ui_car.json"
         if ui_car.is_file():
@@ -259,17 +249,15 @@ def sync_site_content() -> None:
                 version = str(json.loads(ui_car.read_text(encoding="utf-8")).get("version") or "").strip()
             except json.JSONDecodeError:
                 version = None
-    version = version or "1.5"
+    version = version or "2.2"
 
-    payload = {
-        "cars": {
-            "abarth_124_2016": {
-                "url": settings.release_124_url(),
-                "version": version,
-            }
-        }
-    }
-    (dest / "content.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    write_content_json(
+        dest / "content.json",
+        settings.github_owner(),
+        settings.github_pages_repo(),
+        car_version=version,
+        car_url=settings.release_124_url(),
+    )
     print(f"sync_site_content version={version} -> {dest / 'content.json'}")
 
 
@@ -354,6 +342,27 @@ def selected_statics(only: str | None) -> list[dict]:
         known = ", ".join(item["id"] for item in lobbies)
         raise SystemExit(f"unknown static lobby {only!r}; have: {known}")
     return match
+
+
+def cmd_recycle_static(args: argparse.Namespace) -> None:
+    """Re-render cfg and recreate practice containers. Does not rebuild sidecars."""
+    for lobby in selected_statics(args.only):
+        udp, http, details = ports_for_slot(int(lobby["slot"]))
+        cfg = STATE / "static" / lobby["id"] / "cfg"
+        results = STATE / "static" / lobby["id"] / "results"
+        render(
+            lobby["track"],
+            "practice",
+            f"{lobby['name']}{CM_DETAILS_MARK}{details}",
+            udp,
+            http,
+            cfg,
+        )
+        run_server_container(name=static_container(lobby["id"]), cfg=cfg, results=results)
+        print(
+            f"recycled {lobby['id']} on {udp}/{http} details={details} "
+            f"track={lobby['track']} env={AC_ENV}"
+        )
 
 
 def cmd_up_static(args: argparse.Namespace) -> None:
@@ -484,6 +493,13 @@ def main() -> None:
 
     rp = sub.add_parser("restart-plugin", help="Restart leaderboard plugin only (no lobby kick)")
     rp.set_defaults(func=cmd_restart_plugin)
+
+    recycle = sub.add_parser(
+        "recycle-static",
+        help="Nightly: re-render practice cfg and recreate lobby containers (kicks drivers)",
+    )
+    recycle.add_argument("--only", default=None, help="Recycle one static lobby id")
+    recycle.set_defaults(func=cmd_recycle_static)
 
     args = parser.parse_args()
     apply_env(args.env)

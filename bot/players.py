@@ -105,3 +105,32 @@ def format_livery(player: dict) -> str:
     if not isinstance(livery, dict) or not livery.get("car"):
         return "none (server default when you join)"
     return f"`{livery.get('car')}` / `{livery.get('skin')}`"
+
+
+def find_pending_item(requests: list[dict], *, request_id: str | None = None, discord_id: str | None = None) -> dict | None:
+    for item in requests:
+        if item.get("status") != "pending":
+            continue
+        if request_id and item.get("id") == request_id:
+            return item
+        if discord_id and item.get("discord_id") == discord_id:
+            return item
+    return None
+
+
+def find_pending_livery_combo(
+    requests: list[dict],
+    car: str,
+    skin: str,
+    *,
+    except_discord: str | None = None,
+) -> dict | None:
+    """Another pending request already claiming this car+color."""
+    for item in requests:
+        if item.get("status") != "pending":
+            continue
+        if except_discord and item.get("discord_id") == except_discord:
+            continue
+        if item.get("car") == car and item.get("skin") == skin:
+            return item
+    return None

@@ -9,6 +9,11 @@ import os
 import sys
 from pathlib import Path
 
+SHARED = Path(__file__).resolve().parents[1] / "shared"
+if str(SHARED) not in sys.path:
+    sys.path.insert(0, str(SHARED))
+import downtime
+
 # Must match sidecar/plugin.py and scripts/acctl.py
 GAME_PORT_START = 9600
 PLUGIN_LOCAL_START = 11200
@@ -175,10 +180,11 @@ def server_cfg(
     auth_line = f"{auth}/?" if auth else ""
     plugin_local, plugin_event = plugin_ports(udp)
     listed = 1 if (register if register is not None else register_to_lobby()) else 0
+    practice_time = downtime.practice_time_minutes() if mode == "practice" else 10
     sessions = [
         "[PRACTICE]",
         "NAME=Practice",
-        "TIME=1440" if mode == "practice" else "TIME=10",
+        f"TIME={practice_time}",
         "IS_OPEN=1",
         "",
     ]

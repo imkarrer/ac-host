@@ -92,6 +92,12 @@ def release_124_url() -> str:
     )
 
 
+def release_track_url(folder: str) -> str:
+    return (
+        f"https://github.com/{github_owner()}/{github_pages_repo()}/releases/download/content/{folder}.zip"
+    )
+
+
 def unifi_host() -> str:
     return getenv("UNIFI_HOST", "192.168.1.1")
 
@@ -102,3 +108,19 @@ def unifi_fwd_ip() -> str:
 
 def join_url(http_port: int) -> str:
     return f"https://acstuff.ru/s/q:race/online/join?ip={public_ip()}&httpPort={http_port}"
+
+
+def discord_channel_url() -> str:
+    """Deep link to the Discord channel where /steam-request is used."""
+    return getenv(
+        "DISCORD_CHANNEL_URL",
+        "https://discord.com/channels/1544532113615749210/1545234414265700374",
+    )
+
+
+def discord_feature_requests_url() -> str:
+    """Deep link to #feature-requests (car / track asks)."""
+    return getenv(
+        "DISCORD_FEATURE_REQUESTS_URL",
+        "https://discord.com/channels/1544532113615749210/1544893635353649294",
+    )

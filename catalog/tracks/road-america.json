@@ -1,0 +1,12 @@
+{
+  "id": "road-america",
+  "displayName": "Road America",
+  "folder": "lilski_road_america",
+  "version": "1.0",
+  "layout": "",
+  "maxClients": 24,
+  "cars": ["abarth_124_2016", "tbb_toyota_gr86_premium", "pc_civic", "ks_mazda_miata", "lotus_elise_sc", "bmw_m3_e30"],
+  "legalTyres": "ST;SM;RT6;E;SV;S;M;H",
+  "source": "https://www.overtake.gg/downloads/road-america.32732/",
+  "notes": "LilSki 1.0. 4.048 mi / 43 pits on the track; 24 clients is the practice default. Install the OverTake zip via Content Manager so content/tracks/lilski_road_america exists, then run sync_content.py --track road-america."
+}

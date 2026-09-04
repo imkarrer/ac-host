@@ -43,6 +43,27 @@ def load_env_files() -> None:
         load_dotenv(path)
 
 
+def practice_car_list_html() -> str:
+    from car_skins import PRACTICE_CARS, load_car_display_names
+
+    names = load_car_display_names(REPO / "catalog")
+    items = []
+    for folder in PRACTICE_CARS:
+        label = names.get(folder) or folder
+        items.append(f"<li>{label}</li>")
+    return "\n            ".join(items)
+
+
+def practice_track_list_html() -> str:
+    from content_manifest import PRACTICE_TRACKS
+
+    items = []
+    for item in PRACTICE_TRACKS:
+        url = settings.release_track_url(item["folder"])
+        items.append(f'<li><a href="{url}">{item["label"]}</a></li>')
+    return "\n            ".join(items)
+
+
 def substitute(text: str) -> str:
     mapping = {
         "__AC_PUBLIC_IP__": settings.public_ip(),
@@ -54,6 +75,10 @@ def substitute(text: str) -> str:
         "__AC_JOIN_8082__": settings.join_url(8082),
         "__AC_JOIN_8083__": settings.join_url(8083),
         "__AC_JOIN_8089__": settings.join_url(8089),
+        "__AC_DISCORD_CHANNEL__": settings.discord_channel_url(),
+        "__AC_DISCORD_FEATURE_REQUESTS__": settings.discord_feature_requests_url(),
+        "__AC_CARS_LIST__": practice_car_list_html(),
+        "__AC_TRACKS_LIST__": practice_track_list_html(),
     }
     for key, value in mapping.items():
         text = text.replace(key, value)
@@ -61,17 +86,16 @@ def substitute(text: str) -> str:
 
 
 def write_content_json(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "cars": {
-            "abarth_124_2016": {
-                "url": settings.release_124_url(),
-                "version": "1.5",
-            }
-        }
-    }
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    print(f"wrote {path}")
+    from content_manifest import existing_car_version, write_content_json as write_manifest
+
+    version = existing_car_version(REPO / "site" / "content.json") or "2.2"
+    write_manifest(
+        path,
+        settings.github_owner(),
+        settings.github_pages_repo(),
+        car_version=version,
+        car_url=settings.release_124_url(),
+    )
 
 
 def main() -> None:

@@ -51,5 +51,39 @@ class RenderCfgPluginTests(unittest.TestCase):
             self.assertEqual(register_to_lobby(), 0)
 
 
+class PracticeTimeTests(unittest.TestCase):
+    def test_practice_time_is_minutes_until_3am(self) -> None:
+        with patch("render_cfg.downtime.practice_time_minutes", return_value=480):
+            text = server_cfg(
+                name="Practice — Blackhawk Farms",
+                track={"folder": "slipangle_ggt", "layout": "", "cars": ["abarth_124_2016"], "maxClients": 24},
+                mode="practice",
+                udp=9600,
+                tcp=9600,
+                http=8081,
+                auth="127.0.0.1:18080",
+                admin_password="x",
+                loop=1,
+                register=0,
+            )
+        self.assertIn("TIME=480", text)
+        self.assertNotIn("TIME=1440", text)
+
+    def test_race_practice_time_stays_ten(self) -> None:
+        text = server_cfg(
+            name="Race",
+            track={"folder": "slipangle_ggt", "layout": "", "cars": ["abarth_124_2016"], "maxClients": 24},
+            mode="race",
+            udp=9600,
+            tcp=9600,
+            http=8081,
+            auth="127.0.0.1:18080",
+            admin_password="x",
+            loop=0,
+            register=0,
+        )
+        self.assertIn("TIME=10", text)
+
+
 if __name__ == "__main__":
     unittest.main()

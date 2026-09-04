@@ -177,6 +177,45 @@ class DetailsTests(unittest.TestCase):
         self.assertEqual(len(printed), 1)
         self.assertIn("501", printed[0])
 
+    def test_discover_prefers_live_cfg_on_port_conflict(self):
+        with tempfile.TemporaryDirectory() as raw:
+            state = Path(raw)
+
+            def write_cfg(name: str, http_port: int, track: str) -> None:
+                cfg = state / "static" / name / "cfg"
+                cfg.mkdir(parents=True)
+                (cfg / "server_cfg.ini").write_text(
+                    f"[SERVER]\nHTTP_PORT={http_port}\nTRACK={track}\n",
+                    encoding="utf-8",
+                )
+
+            write_cfg("blackhawk", 8081, "slipangle_ggt")
+            write_cfg("brainerd-competition", 8082, "gb_brainerd")
+            write_cfg("road-america", 8082, "lilski_road_america")
+            write_cfg("brainerd-donnybrooke", 8083, "gb_brainerd")
+            write_cfg("gingerman", 8083, "gingerman_raceway")
+
+            def fake_info(http_port: int) -> dict:
+                return {
+                    8081: {"track": "slipangle_ggt"},
+                    8082: {"track": "lilski_road_america"},
+                    8083: {"track": "gingerman_raceway-full_forward"},
+                }.get(http_port, {})
+
+            with patch.object(details, "load_info", side_effect=fake_info):
+                found = details.discover(state)
+            names = {cfg.parent.name: port for port, cfg in found}
+            self.assertEqual(
+                names,
+                {"blackhawk": 8181, "road-america": 8182, "gingerman": 8183},
+            )
+
+    def test_cfg_matches_layout_suffix(self):
+        self.assertTrue(
+            details.cfg_matches_live("gingerman_raceway", "gingerman_raceway-full_forward")
+        )
+        self.assertFalse(details.cfg_matches_live("gb_brainerd", "lilski_road_america"))
+
 
 if __name__ == "__main__":
     unittest.main()

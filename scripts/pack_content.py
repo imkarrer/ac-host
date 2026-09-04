@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build CM-installable zips (root entry = car or track folder name).
 
-One zip per folder. Brainerd layouts stay in gb_brainerd — that is one asset.
+One zip per folder. Multi-layout tracks (e.g. gb_brainerd) stay one asset.
 Do not stuff the 124 and both tracks into one archive: CM Online downloads
 the car URL and this lobby's track URL separately.
 """
@@ -56,7 +56,7 @@ STORE_SUFFIXES = {
 }
 
 DEFAULT_CARS = ("abarth_124_2016", "tbb_toyota_gr86_premium", "pc_civic")
-DEFAULT_TRACKS = ("slipangle_ggt", "gb_brainerd")
+DEFAULT_TRACKS = ("slipangle_ggt", "lilski_road_america", "gingerman_raceway")
 CM_RELEASES_API = "https://api.github.com/repos/gro-ove/actools/releases/latest"
 CM_ZIP_NAME = "Content.Manager.zip"
 HTTP_HEADERS = {
@@ -196,7 +196,11 @@ def main() -> None:
         default=[],
         help="Track folder under content/tracks",
     )
-    parser.add_argument("--all", action="store_true", help="Pack the 124, GR86, Gray Ghost, Brainerd, and fetch CM")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Pack practice cars + Blackhawk, Road America, Gingerman, and fetch CM",
+    )
     parser.add_argument(
         "--cm",
         action="store_true",

@@ -4,5 +4,19 @@
       "url": "https://github.com/imkarrer/ac-practice/releases/download/content/abarth_124_2016.zip",
       "version": "2.2"
     }
+  },
+  "tracks": {
+    "slipangle_ggt": {
+      "url": "https://github.com/imkarrer/ac-practice/releases/download/content/slipangle_ggt.zip",
+      "version": "1.1.1"
+    },
+    "lilski_road_america": {
+      "url": "https://github.com/imkarrer/ac-practice/releases/download/content/lilski_road_america.zip",
+      "version": "1.0"
+    },
+    "gingerman_raceway": {
+      "url": "https://github.com/imkarrer/ac-practice/releases/download/content/gingerman_raceway.zip",
+      "version": "1.0"
+    }
   }
 }

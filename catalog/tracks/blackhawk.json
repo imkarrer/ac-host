@@ -2,6 +2,7 @@
   "id": "blackhawk",
   "displayName": "Blackhawk Farms",
   "folder": "slipangle_ggt",
+  "version": "1.1.1",
   "layout": "",
   "maxClients": 24,
   "cars": ["abarth_124_2016", "tbb_toyota_gr86_premium", "pc_civic", "ks_mazda_miata", "lotus_elise_sc", "bmw_m3_e30"],

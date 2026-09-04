@@ -266,6 +266,8 @@ class DetailsHandler(BaseHTTPRequestHandler):
 
 
 class DetailsServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+
     def __init__(self, port: int, cfg_dir: Path, content: Path):
         super().__init__(("0.0.0.0", port), DetailsHandler)
         self.cfg_dir = cfg_dir
@@ -273,14 +275,56 @@ class DetailsServer(ThreadingHTTPServer):
         self.details_port = port
 
 
+def live_track_name(http_port: int) -> str:
+    return str(load_info(http_port).get("track") or "").strip()
+
+
+def cfg_matches_live(track_folder: str, live_track: str) -> bool:
+    """INFO uses `folder` or `folder-layout` (e.g. gingerman_raceway-full_forward)."""
+    folder = (track_folder or "").strip()
+    live = (live_track or "").strip()
+    if not folder or not live:
+        return False
+    return live == folder or live.startswith(folder + "-")
+
+
 def discover(state: Path) -> list[tuple[int, Path]]:
-    found: list[tuple[int, Path]] = []
+    """One details port per live HTTP_PORT.
+
+    Leftover static dirs (retired Brainerd, etc.) keep their old HTTP_PORT and
+    would crash the process on bind — or worse, answer ℹ8182 with the wrong
+    track so CM greys out every car. Prefer the cfg whose TRACK matches /INFO.
+    """
+    grouped: dict[int, list[tuple[Path, str, int]]] = {}
     for cfg in sorted(state.glob("static/*/cfg")) + sorted(state.glob("races/*/cfg")):
         server = parse_ini_section(cfg / "server_cfg.ini", "SERVER")
-        http_port = server.get("HTTP_PORT")
-        if not http_port:
+        raw_http = server.get("HTTP_PORT")
+        if not raw_http:
             continue
-        found.append((int(http_port) + 100, cfg))
+        try:
+            http_port = int(raw_http)
+        except ValueError:
+            continue
+        grouped.setdefault(http_port + 100, []).append(
+            (cfg, server.get("TRACK") or "", http_port)
+        )
+
+    found: list[tuple[int, Path]] = []
+    for details_port, items in sorted(grouped.items()):
+        if len(items) == 1:
+            found.append((details_port, items[0][0]))
+            continue
+        live = live_track_name(items[0][2])
+        matched = [item for item in items if cfg_matches_live(item[1], live)]
+        chosen = matched[0] if len(matched) == 1 else max(items, key=lambda item: item[0].stat().st_mtime)
+        for item in items:
+            if item[0] == chosen[0]:
+                continue
+            print(
+                f"details skip {item[0].parent.name} "
+                f"(port {details_port} served by {chosen[0].parent.name})"
+            )
+        found.append((details_port, chosen[0]))
     return found
 
 
@@ -289,7 +333,11 @@ def main() -> None:
     content = Path(os.environ.get("AC_CONTENT", "/content"))
     servers = []
     for port, cfg_dir in discover(state):
-        httpd = DetailsServer(port, cfg_dir, content)
+        try:
+            httpd = DetailsServer(port, cfg_dir, content)
+        except OSError as exc:
+            print(f"details {cfg_dir.parent.name} on {port} failed: {exc}")
+            continue
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
         thread.start()
         servers.append((port, cfg_dir, httpd, thread))

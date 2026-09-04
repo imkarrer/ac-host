@@ -17,6 +17,7 @@
         inherit system;
         modules = [
           self.nixosModules.ac-host
+          ./modules/monitoring.nix
           ./hosts/ac-box/configuration.nix
         ];
       };

@@ -8,9 +8,16 @@ import os
 import select
 import socket
 import struct
+import sys
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
+
+_HERE = Path(__file__).resolve().parent
+for _candidate in (_HERE, _HERE.parent / "shared"):
+    if (_candidate / "downtime.py").is_file() and str(_candidate) not in sys.path:
+        sys.path.insert(0, str(_candidate))
+        break
 
 # Must match scripts/render_cfg.py and scripts/acctl.py
 GAME_PORT_START = 9600
@@ -31,6 +38,8 @@ ACSP_CLIENT_LOADED = 58
 ACSP_SESSION_INFO = 59
 ACSP_LAP_COMPLETED = 73
 ACSP_GET_CAR_INFO = 201
+ACSP_SEND_CHAT = 202
+ACSP_BROADCAST_CHAT = 203
 ACSP_GET_SESSION_INFO = 204
 
 
@@ -105,6 +114,12 @@ def write_utf(text: str) -> bytes:
 def write_ascii(text: str) -> bytes:
     encoded = text.encode("ascii", errors="replace")
     return bytes([len(encoded)]) + encoded
+
+
+def pack_broadcast_chat(text: str) -> bytes:
+    """ACSP_BROADCAST_CHAT (203) + UTF-32 string. Truncate so u8 length fits."""
+    clipped = (text or "")[:200]
+    return bytes([ACSP_BROADCAST_CHAT]) + write_utf(clipped)
 
 
 def parse_lap_completed(payload: bytes) -> tuple[int, int, int]:
@@ -373,7 +388,8 @@ class Leaderboard:
             ordered[item["id"]] = current
         for key, value in existing.items():
             if key not in ordered and isinstance(value, dict):
-                ordered[key] = value
+                if key.startswith("race-") or key.startswith("slot-"):
+                    ordered[key] = value
         payload["lobbies"] = ordered
         return payload
 
@@ -478,6 +494,7 @@ class Plugin:
         self.cars: dict[int, dict[int, dict]] = {}
         self.socks: dict[socket.socket, int] = {}
         self.slot_sock: dict[int, socket.socket] = {}
+        self._downtime_prev: float | None = None
         self.board.clear_online()
         self.board.save()
 
@@ -508,6 +525,29 @@ class Plugin:
             sock.sendto(payload, (self.host, PLUGIN_LOCAL_START + slot))
         except OSError as exc:
             print(f"plugin send slot {slot} failed: {exc}")
+
+    def broadcast_chat(self, text: str) -> None:
+        payload = pack_broadcast_chat(text)
+        for slot in list(self.slot_sock):
+            self.send(slot, payload)
+        print(f"plugin chat: {text}")
+
+    def tick_downtime(self) -> None:
+        try:
+            import downtime
+        except ImportError:
+            return
+        remaining = downtime.seconds_until_restart()
+        for mark in downtime.crossed_marks(self._downtime_prev, remaining):
+            self.broadcast_chat(downtime.chat_text(mark))
+        self._downtime_prev = remaining
+
+    def poll_timeout(self) -> float:
+        try:
+            import downtime
+        except ImportError:
+            return 5.0
+        return downtime.poll_timeout_sec(downtime.seconds_until_restart())
 
     def ask_car(self, slot: int, car_id: int) -> None:
         self.send(slot, bytes([ACSP_GET_CAR_INFO, car_id]))
@@ -620,12 +660,19 @@ class Plugin:
         print("plugin waiting for laps")
         idle_ticks = 0
         while True:
-            ready, _, _ = select.select(list(self.socks), [], [], 5.0)
+            timeout = self.poll_timeout()
+            ready, _, _ = select.select(list(self.socks), [], [], timeout)
+            try:
+                self.tick_downtime()
+            except Exception:
+                traceback.print_exc()
             if ready:
                 idle_ticks = 0
             else:
                 idle_ticks += 1
-                if idle_ticks % 6 == 0:
+                # ~30s between occupancy refreshes even with a 0.2s countdown timeout.
+                if idle_ticks * timeout >= 30:
+                    idle_ticks = 0
                     for slot in self.slot_sock:
                         self.ask_all_cars(slot)
             for sock in ready:

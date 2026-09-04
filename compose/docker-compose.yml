@@ -3,7 +3,8 @@ name: ac-host
 services:
   auth:
     build:
-      context: ../sidecar
+      context: ..
+      dockerfile: sidecar/Dockerfile
     image: ac-host-auth:latest
     network_mode: host
     restart: unless-stopped
@@ -52,7 +53,8 @@ services:
   # Content Manager /api/details so Online shows liveries (server name ends with ℹport).
   details:
     build:
-      context: ../sidecar
+      context: ..
+      dockerfile: sidecar/Dockerfile
     image: ac-host-auth:latest
     network_mode: host
     restart: unless-stopped
@@ -68,7 +70,8 @@ services:
   # UDP plugin: LAP_COMPLETED → state/leaderboard.json; optional push to GitHub Pages repo
   plugin:
     build:
-      context: ../sidecar
+      context: ..
+      dockerfile: sidecar/Dockerfile
     image: ac-host-auth:latest
     network_mode: host
     restart: unless-stopped
@@ -80,6 +83,9 @@ services:
       PLUGIN_SLOTS: ${PLUGIN_SLOTS:-}
       AC_DIST: /data/dist
       PLUGIN_HOST: 127.0.0.1
+      PRACTICE_RESTART_AT: ${PRACTICE_RESTART_AT:-03:00}
+      AC_TZ: ${AC_TZ:-America/Chicago}
+      TZ: ${AC_TZ:-America/Chicago}
       GITHUB_STATUS_TOKEN: ${GITHUB_STATUS_TOKEN:-}
       GITHUB_STATUS_REPO: ${GITHUB_STATUS_REPO:-}
       GITHUB_STATUS_BRANCH: ${GITHUB_STATUS_BRANCH:-main}
@@ -90,7 +96,8 @@ services:
 
   bot:
     build:
-      context: ../bot
+      context: ..
+      dockerfile: bot/Dockerfile
     image: ac-host-bot:latest
     profiles: ["bot"]
     restart: unless-stopped
@@ -99,7 +106,16 @@ services:
       DISCORD_REQUIRED_ROLE: ${AUTH_REQUIRED_ROLE:-ac-practice}
       DISCORD_ADMIN_ROLE: ${DISCORD_ADMIN_ROLE:-ac-admin}
       DISCORD_REVIEW_CHANNEL_ID: ${DISCORD_REVIEW_CHANNEL_ID:-}
+      DISCORD_STATUS_CHANNEL_ID: ${DISCORD_STATUS_CHANNEL_ID:-1545234415054225511}
       DISCORD_VERIFY_PROFILE: ${DISCORD_VERIFY_PROFILE:-1}
+      PRACTICE_RESTART_AT: ${PRACTICE_RESTART_AT:-03:00}
+      AC_TZ: ${AC_TZ:-America/Chicago}
+      TZ: ${AC_TZ:-America/Chicago}
+      AC_PUBLIC_IP: ${AC_PUBLIC_IP:-}
+      AC_PAGES_URL: ${AC_PAGES_URL:-https://simracing.fugazy.dev}
+      AC_GITHUB_OWNER: ${AC_GITHUB_OWNER:-imkarrer}
+      AC_GITHUB_REPO: ${AC_GITHUB_REPO:-ac-practice}
+      AC_CATALOG_STATICS: ${AC_CATALOG_STATICS:-statics.json}
       WHITELIST_PATH: /data/whitelist.json
       STEAM_REQUESTS_PATH: /data/steam_requests.json
       AC_CONTENT: /content

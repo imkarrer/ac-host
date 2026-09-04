@@ -12,6 +12,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
+from content_manifest import write_content_json  # noqa: E402
 from pack_content import pack_car  # noqa: E402
 
 CAR = "abarth_124_2016"
@@ -25,19 +26,6 @@ def release_url(owner: str, repo: str) -> str:
 
 def pages_url(owner: str, repo: str) -> str:
     return f"https://{owner}.github.io/{repo}/"
-
-
-def write_content_json(path: Path, owner: str, repo: str, version: str = "1.4") -> None:
-    payload = {
-        "cars": {
-            CAR: {
-                "url": release_url(owner, repo),
-                "version": version,
-            }
-        }
-    }
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    print(f"wrote {path}")
 
 
 def ensure_release(owner: str, repo: str) -> None:
@@ -110,10 +98,10 @@ def main() -> None:
         print(f"content.json version aligned to ui_car.json {version}")
 
     site_content = REPO / "site" / "content.json"
-    write_content_json(site_content, owner, repo, version=version)
+    write_content_json(site_content, owner, repo, car_version=version)
 
     dist_content = out / "content.json"
-    write_content_json(dist_content, owner, repo, version=version)
+    write_content_json(dist_content, owner, repo, car_version=version)
 
     if args.no_upload:
         print(f"packed {zip_path}; skipped upload")

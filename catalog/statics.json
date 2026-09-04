@@ -7,15 +7,15 @@
       "slot": 0
     },
     {
-      "id": "brainerd-competition",
-      "track": "brainerd-competition",
-      "name": "Practice — Brainerd Competition",
+      "id": "road-america",
+      "track": "road-america",
+      "name": "Practice — Road America",
       "slot": 1
     },
     {
-      "id": "brainerd-donnybrooke",
-      "track": "brainerd-donnybrooke",
-      "name": "Practice — Brainerd Donnybrooke",
+      "id": "gingerman",
+      "track": "gingerman",
+      "name": "Practice — Gingerman Raceway",
       "slot": 2
     }
   ]

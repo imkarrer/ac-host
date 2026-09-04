@@ -72,7 +72,8 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
+  config = lib.mkMerge [
+    (lib.mkIf cfg.enable {
     virtualisation.docker.enable = true;
     virtualisation.docker.autoPrune.enable = true;
 
@@ -125,6 +126,9 @@ in
         ExecStart = "${pkgs.python3}/bin/python3 ${cfg.repoDir}/scripts/acctl.py --env prod up-static";
         ExecStop = "${pkgs.python3}/bin/python3 ${cfg.repoDir}/scripts/acctl.py --env prod down-static";
       };
+      # oneshot ExecStop is docker rm -f; never bounce this on nixos-rebuild
+      restartIfChanged = false;
+      stopIfChanged = false;
     };
 
     systemd.services.ac-host-dev = lib.mkIf config.services.ac-host-dev.enable {
@@ -150,15 +154,59 @@ in
         ExecStart = "${pkgs.python3}/bin/python3 ${cfg.repoDir}/scripts/acctl.py --env dev up-static";
         ExecStop = "${pkgs.python3}/bin/python3 ${cfg.repoDir}/scripts/acctl.py --env dev down-static --all";
       };
+      restartIfChanged = false;
+      stopIfChanged = false;
     };
-  };
 
-  config = lib.mkIf config.services.ac-host-dev.enable {
-    systemd.tmpfiles.rules = [
-      "d ${config.services.ac-host-dev.stateDir} 0750 root root -"
-      "d ${config.services.ac-host-dev.stateDir}/dist 0755 root root -"
-      "d ${config.services.ac-host-dev.stateDir}/static 0755 root root -"
-      "d ${config.services.ac-host-dev.stateDir}/races 0755 root root -"
-    ];
-  };
+    # 03:00 America/Chicago recycle so the 24h practice TIME never lands on busy hours.
+    # Persistent=false: if the box was off at 3am, skip — boot already starts lobbies.
+    systemd.services.ac-host-nightly = {
+      description = "Assetto Corsa 03:00 practice lobby recycle";
+      after = [ "docker.service" "ac-host-static.service" ];
+      requires = [ "docker.service" ];
+      path = [
+        pkgs.docker
+        pkgs.docker-compose
+        pkgs.python3
+        pkgs.coreutils
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        WorkingDirectory = cfg.repoDir;
+        Environment = [
+          "AC_STATE=${cfg.stateDir}"
+          "AC_CONTENT=${cfg.stateDir}/content"
+          "AUTH_OPEN=${if cfg.authOpen then "1" else "0"}"
+          "AUTH_REQUIRED_ROLE=${cfg.requiredRole}"
+          "COMPOSE_PROJECT_NAME=ac-host"
+          "AC_ENV=prod"
+          "TZ=America/Chicago"
+          "AC_TZ=America/Chicago"
+          "PRACTICE_RESTART_AT=03:00"
+        ];
+        ExecStart = "${pkgs.python3}/bin/python3 ${cfg.repoDir}/scripts/acctl.py --env prod recycle-static";
+      };
+      restartIfChanged = false;
+      stopIfChanged = false;
+    };
+
+    systemd.timers.ac-host-nightly = {
+      description = "03:00 CT practice lobby recycle";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = "*-*-* 03:00:00";
+        Persistent = false;
+        AccuracySec = "1s";
+      };
+    };
+    })
+    (lib.mkIf config.services.ac-host-dev.enable {
+      systemd.tmpfiles.rules = [
+        "d ${config.services.ac-host-dev.stateDir} 0750 root root -"
+        "d ${config.services.ac-host-dev.stateDir}/dist 0755 root root -"
+        "d ${config.services.ac-host-dev.stateDir}/static 0755 root root -"
+        "d ${config.services.ac-host-dev.stateDir}/races 0755 root root -"
+      ];
+    })
+  ];
 }

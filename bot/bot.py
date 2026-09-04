@@ -6,21 +6,32 @@ from __future__ import annotations
 import json
 import os
 import secrets
-from datetime import datetime, timezone
+import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
+
+_HERE = Path(__file__).resolve().parent
+for _candidate in (_HERE, _HERE.parent / "shared"):
+    if (_candidate / "downtime.py").is_file() and str(_candidate) not in sys.path:
+        sys.path.insert(0, str(_candidate))
+        break
 
 from steam_parse import parse_profile, steam64_from_xml, vanity_slug
 import car_skins
+import page_mirror
+import downtime
 from players import (
     NOT_BOT_REGISTERED,
     clear_livery,
     find_livery_holder,
+    find_pending_item,
+    find_pending_livery_combo,
     find_player,
     format_livery,
     player_for_discord,
@@ -37,7 +48,16 @@ REQUIRED_ROLE = os.environ.get("DISCORD_REQUIRED_ROLE", "ac-practice")
 ADMIN_ROLE = os.environ.get("DISCORD_ADMIN_ROLE", "ac-admin")
 _raw_channel = os.environ.get("DISCORD_REVIEW_CHANNEL_ID", "").strip()
 REVIEW_CHANNEL_ID = int(_raw_channel) if _raw_channel.isdigit() else 0
+_raw_status = os.environ.get("DISCORD_STATUS_CHANNEL_ID", "").strip()
+STATUS_CHANNEL_ID = int(_raw_status) if _raw_status.isdigit() else 0
 VERIFY_PROFILE_HTTP = os.environ.get("DISCORD_VERIFY_PROFILE", "1") != "0"
+PUBLIC_IP = os.environ.get("AC_PUBLIC_IP", "").strip()
+PAGES_URL = os.environ.get("AC_PAGES_URL", "https://simracing.fugazy.dev").strip()
+STATICS_PATH = Path(os.environ.get("AC_CATALOG_STATICS") or (CATALOG_PATH / "statics.json"))
+if not STATICS_PATH.is_absolute():
+    STATICS_PATH = CATALOG_PATH / STATICS_PATH
+LEADERBOARD_PATH = Path(os.environ.get("LEADERBOARD_PATH") or (WHITELIST_PATH.parent / "leaderboard.json"))
+MIRROR_STATE_PATH = Path(os.environ.get("PAGE_MIRROR_PATH") or (WHITELIST_PATH.parent / "page_mirror.json"))
 
 
 def load_json(path: Path, default: dict) -> dict:
@@ -66,11 +86,115 @@ def save_whitelist(data: dict) -> None:
 
 
 def load_pending() -> dict:
-    return load_json(PENDING_PATH, {"requests": []})
+    data = load_json(PENDING_PATH, {"requests": [], "livery_requests": []})
+    data.setdefault("requests", [])
+    data.setdefault("livery_requests", [])
+    return data
 
 
 def save_pending(data: dict) -> None:
     save_json(PENDING_PATH, data)
+
+
+def page_snapshot() -> dict:
+    display = car_skins.load_car_display_names(CATALOG_PATH)
+    cars = [name for _, name in car_skins.list_practice_cars(CONTENT_PATH, CATALOG_PATH)]
+    if not cars:
+        cars = [display.get(folder) or folder for folder in car_skins.PRACTICE_CARS]
+    return page_mirror.snapshot(
+        statics=page_mirror.load_statics(STATICS_PATH),
+        board=page_mirror.load_json(LEADERBOARD_PATH, {"updated": None, "lobbies": {}}),
+        public_ip=PUBLIC_IP or "127.0.0.1",
+        pages_url=PAGES_URL,
+        cars=cars,
+    )
+
+
+def snapshot_embed(snap: dict) -> discord.Embed:
+    embed = discord.Embed(
+        title=snap["title"],
+        description=snap["description"],
+        color=snap["color"],
+        url=snap.get("url") or None,
+    )
+    for field in snap["fields"]:
+        embed.add_field(name=field["name"], value=field["value"][:1024], inline=field.get("inline", True))
+    embed.set_footer(text=snap["footer"])
+    return embed
+
+
+def snapshot_view(snap: dict) -> discord.ui.View:
+    view = discord.ui.View(timeout=None)
+    for button in snap["buttons"][:25]:
+        view.add_item(
+            discord.ui.Button(
+                style=discord.ButtonStyle.link,
+                label=str(button["label"])[:80],
+                url=str(button["url"]),
+            )
+        )
+    return view
+
+
+async def retire_setup_status_pin(channel: discord.TextChannel) -> None:
+    async for msg in channel.history(limit=40):
+        if msg.author != channel.guild.me and msg.author != bot.user:
+            continue
+        for embed in msg.embeds:
+            footer = embed.footer.text if embed.footer else ""
+            if footer == "fugazy-setup:status":
+                try:
+                    await msg.delete()
+                except discord.HTTPException:
+                    pass
+                return
+
+
+async def publish_page_mirror() -> discord.Message | None:
+    if not STATUS_CHANNEL_ID or not PUBLIC_IP:
+        return None
+    channel = bot.get_channel(STATUS_CHANNEL_ID)
+    if channel is None:
+        try:
+            fetched = await bot.fetch_channel(STATUS_CHANNEL_ID)
+        except discord.HTTPException:
+            return None
+        channel = fetched
+    if not isinstance(channel, discord.TextChannel):
+        return None
+    snap = page_snapshot()
+    embed = snapshot_embed(snap)
+    view = snapshot_view(snap)
+    state = load_json(MIRROR_STATE_PATH, {})
+    message = None
+    raw_id = str(state.get("message_id") or "").strip()
+    if raw_id.isdigit() and str(state.get("channel_id") or "") == str(channel.id):
+        try:
+            message = await channel.fetch_message(int(raw_id))
+        except discord.HTTPException:
+            message = None
+    if message is None:
+        await retire_setup_status_pin(channel)
+        message = await channel.send(embed=embed, view=view)
+        save_json(MIRROR_STATE_PATH, {"channel_id": str(channel.id), "message_id": str(message.id)})
+        try:
+            await message.pin()
+        except discord.HTTPException:
+            pass
+        print(f"page mirror posted #{channel.name} {message.id}")
+        return message
+    last = str(state.get("snapshot") or "")
+    current = json.dumps(
+        {"fields": snap["fields"], "buttons": snap["buttons"], "footer": snap["footer"]},
+        sort_keys=True,
+    )
+    if last != current or not message.components:
+        await message.edit(embed=embed, view=view)
+        save_json(
+            MIRROR_STATE_PATH,
+            {"channel_id": str(channel.id), "message_id": str(message.id), "snapshot": current},
+        )
+    return message
 
 
 def fetch_steam(url: str, *, limit: int = 8000) -> tuple[int, str] | tuple[None, str]:
@@ -182,14 +306,7 @@ def disable_discord(data: dict, discord_id: str) -> bool:
 
 
 def find_pending(requests: list[dict], *, discord_id: str | None = None, request_id: str | None = None) -> dict | None:
-    for item in requests:
-        if item.get("status") != "pending":
-            continue
-        if request_id and item.get("id") == request_id:
-            return item
-        if discord_id and item.get("discord_id") == discord_id:
-            return item
-    return None
+    return find_pending_item(requests, request_id=request_id, discord_id=discord_id)
 
 
 def request_embed(item: dict, *, status: str | None = None) -> discord.Embed:
@@ -208,6 +325,25 @@ def request_embed(item: dict, *, status: str | None = None) -> discord.Embed:
     embed.add_field(name="SteamID64", value=f"`{item['steam_id']}`", inline=True)
     embed.add_field(name="Profile", value=item["profile_url"], inline=False)
     embed.set_footer(text=f"request {item['id']}")
+    return embed
+
+
+def livery_embed(item: dict, *, status: str | None = None) -> discord.Embed:
+    state = status or item.get("status") or "pending"
+    color = {
+        "pending": discord.Color.blurple(),
+        "approved": discord.Color.green(),
+        "denied": discord.Color.red(),
+    }.get(state, discord.Color.greyple())
+    embed = discord.Embed(
+        title=f"Livery reserve ({state})",
+        color=color,
+        timestamp=datetime.now(timezone.utc),
+    )
+    embed.add_field(name="Discord", value=f"<@{item['discord_id']}>\n`{item.get('discord_name')}`", inline=True)
+    embed.add_field(name="Car", value=f"`{item.get('car')}`", inline=True)
+    embed.add_field(name="Color", value=f"`{item.get('skin')}`", inline=True)
+    embed.set_footer(text=f"livery {item['id']}")
     return embed
 
 
@@ -323,6 +459,107 @@ async def finalize_request(interaction: discord.Interaction, request_id: str, *,
             pass
 
 
+class PersistentLiveryReviewView(discord.ui.View):
+    def __init__(self) -> None:
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, custom_id="ac_host:livery_approve")
+    async def approve(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
+        await handle_livery_button(interaction, approve=True)
+
+    @discord.ui.button(label="Deny", style=discord.ButtonStyle.danger, custom_id="ac_host:livery_deny")
+    async def deny(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
+        await handle_livery_button(interaction, approve=False)
+
+
+async def handle_livery_button(interaction: discord.Interaction, *, approve: bool) -> None:
+    if not isinstance(interaction.user, discord.Member) or not is_admin(interaction.user):
+        await interaction.response.send_message(
+            f"Only `{ADMIN_ROLE}` (or Manage Server) can review livery reserves.",
+            ephemeral=True,
+        )
+        return
+    if not interaction.message or not interaction.message.embeds:
+        await interaction.response.send_message("Missing request embed.", ephemeral=True)
+        return
+    footer = interaction.message.embeds[0].footer.text or ""
+    request_id = footer.replace("livery ", "").strip()
+    if not request_id:
+        await interaction.response.send_message("Could not read livery request id.", ephemeral=True)
+        return
+    await finalize_livery(interaction, request_id, approve=approve)
+
+
+async def finalize_livery(interaction: discord.Interaction, request_id: str, *, approve: bool) -> None:
+    pending = load_pending()
+    item = find_pending_item(pending.get("livery_requests") or [], request_id=request_id)
+    if not item:
+        await interaction.response.send_message("No pending livery request with that id (already handled?).", ephemeral=True)
+        return
+
+    guild = interaction.guild
+    member = guild.get_member(int(item["discord_id"])) if guild else None
+    if member is None and guild:
+        try:
+            member = await guild.fetch_member(int(item["discord_id"]))
+        except discord.HTTPException:
+            member = None
+
+    if approve:
+        data = load_whitelist()
+        holder = find_livery_holder(
+            data,
+            item["car"],
+            item["skin"],
+            except_steam=str(item.get("steam_id") or ""),
+            except_discord=str(item.get("discord_id") or ""),
+        )
+        if holder:
+            await interaction.response.send_message(
+                f"Can't approve — {player_public_name(holder)} already has **{item['car']}** / **{item['skin']}**.",
+                ephemeral=True,
+            )
+            return
+        player = player_for_discord(data, str(item["discord_id"])) or find_player(data, steam_id=item.get("steam_id"))
+        if not player:
+            await interaction.response.send_message("That user is not on the whitelist anymore.", ephemeral=True)
+            return
+        set_livery(player, item["car"], item["skin"])
+        save_whitelist(data)
+        item["status"] = "approved"
+        item["resolved_at"] = utcnow()
+        item["resolved_by"] = str(interaction.user.id)
+        save_pending(pending)
+        await interaction.response.edit_message(embed=livery_embed(item), view=None)
+        if interaction.channel:
+            await interaction.channel.send(
+                f"<@{item['discord_id']}> reserved **{item['car']}** / **{item['skin']}**. "
+                "Applies after the next practice lobby restart."
+            )
+        if member:
+            try:
+                await member.send(
+                    f"Your livery reserve was **approved**: `{item['car']}` / `{item['skin']}`.\n"
+                    "It applies after the next practice lobby restart."
+                )
+            except discord.HTTPException:
+                pass
+        return
+
+    item["status"] = "denied"
+    item["resolved_at"] = utcnow()
+    item["resolved_by"] = str(interaction.user.id)
+    save_pending(pending)
+    await interaction.response.edit_message(embed=livery_embed(item), view=None)
+    if member:
+        try:
+            await member.send(
+                f"Your livery reserve for `{item['car']}` / `{item['skin']}` was **denied**."
+            )
+        except discord.HTTPException:
+            pass
+
+
 class LobbyBot(commands.Bot):
     def __init__(self) -> None:
         intents = discord.Intents.default()
@@ -332,9 +569,13 @@ class LobbyBot(commands.Bot):
             intents.members = True
         super().__init__(command_prefix="!", intents=intents)
         self._commands_synced = False
+        self._downtime_prev: float | None = None
+        self._countdown_msg: discord.Message | None = None
+        self._drill_at: datetime | None = None
 
     async def setup_hook(self) -> None:
         self.add_view(PersistentReviewView())
+        self.add_view(PersistentLiveryReviewView())
         # Global sync can take up to an hour to show in the Discord client.
         # Guild sync is immediate — do that in on_ready once we know the servers.
 
@@ -394,15 +635,153 @@ async def skin_autocomplete(
     return choices
 
 
+@tasks.loop(seconds=20)
+async def refresh_page_mirror() -> None:
+    try:
+        await publish_page_mirror()
+    except Exception as exc:
+        print(f"page mirror refresh failed: {exc}")
+
+
+@refresh_page_mirror.before_loop
+async def wait_for_bot() -> None:
+    await bot.wait_until_ready()
+
+
+async def status_text_channel() -> discord.TextChannel | None:
+    if not STATUS_CHANNEL_ID:
+        return None
+    channel = bot.get_channel(STATUS_CHANNEL_ID)
+    if channel is None:
+        try:
+            fetched = await bot.fetch_channel(STATUS_CHANNEL_ID)
+        except discord.HTTPException:
+            return None
+        channel = fetched
+    return channel if isinstance(channel, discord.TextChannel) else None
+
+
+def downtime_remaining() -> float | None:
+    drill = bot._drill_at
+    if drill is not None:
+        delta = (drill - downtime.now_local()).total_seconds()
+        if delta < -1:
+            bot._drill_at = None
+            return downtime.seconds_until_restart()
+        return delta
+    return downtime.seconds_until_restart()
+
+
+async def fire_downtime_mark(mark: int) -> None:
+    channel = await status_text_channel()
+    if channel is None:
+        print(f"downtime mark {mark} skipped (no #server-status)")
+        return
+    whitelist = load_whitelist()
+    board = load_json(LEADERBOARD_PATH, {"updated": None, "lobbies": {}})
+    online = downtime.online_lines(whitelist, board)
+    ids = downtime.mention_ids(whitelist, board) if mark in downtime.MENTION_MARKS else []
+    text = downtime.discord_text(mark, online=online)
+    users = []
+    for snowflake in ids:
+        if snowflake.isdigit():
+            users.append(discord.Object(id=int(snowflake)))
+    mentions = discord.AllowedMentions(everyone=False, roles=False, users=users, replied_user=False)
+    try:
+        if mark in downtime.EDIT_MARKS and mark < 5 and bot._countdown_msg is not None:
+            await bot._countdown_msg.edit(content=text)
+            return
+        message = await channel.send(text, allowed_mentions=mentions)
+        bot._countdown_msg = message if mark == 5 else None
+        print(f"downtime discord mark={mark}")
+    except discord.HTTPException as exc:
+        print(f"downtime discord failed mark={mark}: {exc}")
+
+
+@tasks.loop(seconds=5)
+async def downtime_tick() -> None:
+    try:
+        remaining = downtime_remaining()
+        marks = downtime.crossed_marks(bot._downtime_prev, remaining)
+        bot._downtime_prev = remaining
+        for mark in marks:
+            await fire_downtime_mark(mark)
+        if remaining is not None and remaining <= 15:
+            downtime_tick.change_interval(seconds=0.2)
+        elif remaining is not None and remaining <= 610:
+            downtime_tick.change_interval(seconds=1)
+        else:
+            downtime_tick.change_interval(seconds=5)
+    except Exception as exc:
+        print(f"downtime tick failed: {exc}")
+
+
+@downtime_tick.before_loop
+async def wait_for_downtime() -> None:
+    await bot.wait_until_ready()
+
+
 @bot.event
 async def on_ready() -> None:
     print(f"bot ready as {bot.user} guilds={len(bot.guilds)} review_channel={REVIEW_CHANNEL_ID}")
     print(f"content={CONTENT_PATH} cars={len(car_skins.list_practice_cars(CONTENT_PATH, CATALOG_PATH))}")
+    print(f"page mirror channel={STATUS_CHANNEL_ID} ip={PUBLIC_IP or '(unset)'} pages={PAGES_URL}")
     await sync_guild_commands()
+    if STATUS_CHANNEL_ID and PUBLIC_IP and not refresh_page_mirror.is_running():
+        refresh_page_mirror.start()
+    if STATUS_CHANNEL_ID and not downtime_tick.is_running():
+        downtime_tick.start()
+        nxt = downtime.next_restart()
+        print(f"downtime next={nxt.isoformat() if nxt else 'off'}")
+
+
+@bot.tree.command(name="practice", description="Show practice join links (same as the player page)")
+async def practice(interaction: discord.Interaction) -> None:
+    snap = page_snapshot()
+    await interaction.response.send_message(embed=snapshot_embed(snap), view=snapshot_view(snap), ephemeral=True)
+
+
+@bot.tree.command(name="downtime-next", description="When the nightly practice recycle fires")
+async def downtime_next(interaction: discord.Interaction) -> None:
+    nxt = downtime.next_restart()
+    remaining = downtime.seconds_until_restart()
+    if nxt is None or remaining is None:
+        await interaction.response.send_message("Nightly recycle is off (`PRACTICE_RESTART_AT`).", ephemeral=True)
+        return
+    mins = int(remaining // 60)
+    secs = int(remaining % 60)
+    await interaction.response.send_message(
+        f"Next recycle **{downtime.restart_clock_label(nxt)}** "
+        f"({nxt.strftime('%Y-%m-%d %H:%M %Z')}) — in {mins}m {secs}s.\n"
+        "Countdown posts in #server-status at 10m / 5m / 1m / 30s / 5s.",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="downtime-drill", description="Admin: run the recycle countdown now (Discord only, no kick)")
+@app_commands.describe(seconds="Seconds until the fake restart (6–120, default 20)")
+async def downtime_drill(interaction: discord.Interaction, seconds: int = 20) -> None:
+    if not isinstance(interaction.user, discord.Member) or not is_admin(interaction.user):
+        await interaction.response.send_message(f"Need `{ADMIN_ROLE}` or Manage Server.", ephemeral=True)
+        return
+    seconds = max(6, min(int(seconds), 120))
+    bot._drill_at = downtime.now_local() + timedelta(seconds=seconds)
+    bot._downtime_prev = float(seconds) + 0.05
+    bot._countdown_msg = None
+    downtime_tick.change_interval(seconds=0.2)
+    await interaction.response.send_message(
+        f"Armed a **{seconds}s** countdown in #server-status. "
+        "Does **not** restart lobbies. In-game chat still follows the real 3:00 AM clock.",
+        ephemeral=True,
+    )
 
 
 @bot.tree.command(name="steam-help", description="How to request access to the AC practice lobbies")
 async def steam_help(interaction: discord.Interaction) -> None:
+    display = car_skins.load_car_display_names(CATALOG_PATH)
+    car_line = " · ".join(
+        display.get(folder) or folder for folder in car_skins.PRACTICE_CARS
+    )
     text = (
         "**We accept either Steam profile link**\n"
         "• `https://steamcommunity.com/id/yourname`  ← what Steam usually copies\n"
@@ -415,12 +794,20 @@ async def steam_help(interaction: discord.Interaction) -> None:
         "4. Wait for an admin to **Approve** (you’ll get a DM if possible).\n"
         "5. Join from Content Manager after you’re approved.\n\n"
         "**Livery (one car + color)**\n"
-        "After the bot has approved you: `/livery-set` → pick car → pick color. "
-        "Only **one** preference (run it again to replace). "
-        "Each car+color can be reserved by **one** person. "
-        "Your pick is posted in the channel. Applies after the next lobby restart.\n"
+        "After Steam approval: `/livery-set` → pick car → pick color. "
+        "An **admin must Approve** before it is reserved. "
+        "A reserve holds a **pit slot**, so priority is "
+        "**local CVSCC members**, then **SSCLAC members**, then everyone else. "
+        "Only **one** preference (a new request replaces the old one after approval). "
+        "Each car+color can be held by **one** person.\n"
         "`/livery-show` · `/livery-clear`\n"
-        "If you were added by hand, `/livery-set` fails until you `/steam-request` and get approved."
+        "If you were added by hand, `/livery-set` fails until you `/steam-request` and get approved.\n\n"
+        f"**Cars on practice**\n{car_line}\n"
+        "We add cars by need. Want another? Post in **#feature-requests**.\n\n"
+        "**Tracks** (drop the zip on Content Manager, or join and Download missing content)\n"
+        "• [Blackhawk](https://github.com/imkarrer/ac-practice/releases/download/content/slipangle_ggt.zip)\n"
+        "• [Road America](https://github.com/imkarrer/ac-practice/releases/download/content/lilski_road_america.zip)\n"
+        "• [Gingerman](https://github.com/imkarrer/ac-practice/releases/download/content/gingerman_raceway.zip)"
     )
     await interaction.response.send_message(text, ephemeral=True)
 

@@ -55,6 +55,11 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(info["name"], "Isaac")
         self.assertEqual(info["car"], "abarth_124_2016")
 
+    def test_broadcast_chat_packet(self) -> None:
+        payload = plugin.pack_broadcast_chat("Server recycle in 10 minutes (3:00 AM CT).")
+        self.assertEqual(payload[0], plugin.ACSP_BROADCAST_CHAT)
+        self.assertEqual(plugin.Reader(payload[1:]).utf(), "Server recycle in 10 minutes (3:00 AM CT).")
+
 
 class BoardTests(unittest.TestCase):
     def test_cuts_and_short_laps_rejected(self) -> None:
@@ -245,6 +250,67 @@ class BoardTests(unittest.TestCase):
                 plugin.Plugin(state=root, catalog=catalog, dist=root / "dist", slots=[])
                 data = json.loads((root / "dist" / "leaderboard.json").read_text(encoding="utf-8"))
                 self.assertEqual(data["lobbies"]["blackhawk"]["online"], [])
+
+    def test_retired_static_lobbies_are_dropped(self) -> None:
+        with patch("push_status.schedule_push"):
+            with tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                catalog = root / "catalog"
+                (catalog / "cars").mkdir(parents=True)
+                (catalog / "statics.json").write_text(
+                    json.dumps(
+                        {
+                            "lobbies": [
+                                {
+                                    "id": "blackhawk",
+                                    "name": "Practice — Blackhawk Farms",
+                                    "track": "blackhawk",
+                                    "slot": 0,
+                                }
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                (root / "leaderboard.json").write_text(
+                    json.dumps(
+                        {
+                            "updated": "2026-01-01T00:00:00+00:00",
+                            "lobbies": {
+                                "blackhawk": {
+                                    "id": "blackhawk",
+                                    "name": "Practice — Blackhawk Farms",
+                                    "track": "blackhawk",
+                                    "online": [],
+                                    "allTime": [],
+                                    "session": [],
+                                },
+                                "brainerd-competition": {
+                                    "id": "brainerd-competition",
+                                    "name": "Practice — Brainerd Competition",
+                                    "track": "brainerd-competition",
+                                    "online": [],
+                                    "allTime": [],
+                                    "session": [],
+                                },
+                                "race-sprint1": {
+                                    "id": "race-sprint1",
+                                    "name": "Sprint",
+                                    "track": "magione",
+                                    "online": [],
+                                    "allTime": [],
+                                    "session": [],
+                                },
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                plugin.Plugin(state=root, catalog=catalog, dist=root / "dist", slots=[])
+                data = json.loads((root / "dist" / "leaderboard.json").read_text(encoding="utf-8"))
+                self.assertIn("blackhawk", data["lobbies"])
+                self.assertIn("race-sprint1", data["lobbies"])
+                self.assertNotIn("brainerd-competition", data["lobbies"])
 
 
     def test_resolve_plugin_slots_from_catalog_and_races(self) -> None:
