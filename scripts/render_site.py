@@ -66,7 +66,7 @@ def write_content_json(path: Path) -> None:
         "cars": {
             "abarth_124_2016": {
                 "url": settings.release_124_url(),
-                "version": "1.3",
+                "version": "1.5",
             }
         }
     }

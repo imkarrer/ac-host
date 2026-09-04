@@ -270,6 +270,23 @@ def slot_from_cfg(cfg_dir: Path) -> int | None:
     return None
 
 
+def max_cars_for_slot(state: Path, slot: int) -> int:
+    """How many pit slots acServer actually has for this lobby.
+
+    GET_CAR_INFO past MAX_CLIENTS-1 logs `requested CAR INFO for car N not present`.
+    """
+    for cfg in sorted(state.glob("static/*/cfg")) + sorted(state.glob("races/*/cfg")):
+        if slot_from_cfg(cfg) != slot:
+            continue
+        server = parse_ini_section(cfg / "server_cfg.ini", "SERVER")
+        try:
+            n = int(server.get("MAX_CLIENTS") or MAX_CAR_ID)
+        except ValueError:
+            n = MAX_CAR_ID
+        return max(1, min(MAX_CAR_ID, n))
+    return MAX_CAR_ID
+
+
 def load_statics(catalog: Path) -> list[dict]:
     name = os.environ.get("AC_CATALOG_STATICS", "statics.json")
     path = catalog / name
@@ -447,6 +464,7 @@ class Plugin:
         slots: list[int] | None = None,
     ) -> None:
         self.host = host
+        self.state = state
         self.statics = load_statics(catalog)
         self.slots = slots if slots is not None else resolve_plugin_slots(state, catalog)
         races = load_json(state / "slots.json", {})
@@ -494,8 +512,11 @@ class Plugin:
     def ask_car(self, slot: int, car_id: int) -> None:
         self.send(slot, bytes([ACSP_GET_CAR_INFO, car_id]))
 
+    def car_count(self, slot: int) -> int:
+        return max_cars_for_slot(self.state, slot)
+
     def ask_all_cars(self, slot: int) -> None:
-        for car_id in range(MAX_CAR_ID):
+        for car_id in range(self.car_count(slot)):
             self.ask_car(slot, car_id)
 
     def ask_session(self, slot: int) -> None:

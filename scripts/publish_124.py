@@ -27,7 +27,7 @@ def pages_url(owner: str, repo: str) -> str:
     return f"https://{owner}.github.io/{repo}/"
 
 
-def write_content_json(path: Path, owner: str, repo: str, version: str = "1.3") -> None:
+def write_content_json(path: Path, owner: str, repo: str, version: str = "1.4") -> None:
     payload = {
         "cars": {
             CAR: {
@@ -96,11 +96,24 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     zip_path = pack_car(args.ac_root, CAR, out, skip_check=args.skip_check)
 
+    ui_car = args.ac_root / "content" / "cars" / CAR / "ui" / "ui_car.json"
+    car_ver = None
+    if ui_car.is_file():
+        try:
+            car_ver = str(json.loads(ui_car.read_text(encoding="utf-8")).get("version") or "").strip()
+        except json.JSONDecodeError:
+            car_ver = None
+    version = car_ver or "1.4"
+    if not car_ver:
+        print("warning: ui_car.json missing version; using content.json default", version)
+    else:
+        print(f"content.json version aligned to ui_car.json {version}")
+
     site_content = REPO / "site" / "content.json"
-    write_content_json(site_content, owner, repo)
+    write_content_json(site_content, owner, repo, version=version)
 
     dist_content = out / "content.json"
-    write_content_json(dist_content, owner, repo)
+    write_content_json(dist_content, owner, repo, version=version)
 
     if args.no_upload:
         print(f"packed {zip_path}; skipped upload")

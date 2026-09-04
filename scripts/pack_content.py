@@ -15,14 +15,31 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-SKIP_DIR_NAMES = {"_extract", "__pycache__"}
+SKIP_DIR_NAMES = {"_extract", "__pycache__", "_paint_report"}
 SKIP_FILE_NAMES = {
     "_patch_stripe_meshes.py",
     "_patch_lcd_mph.py",
     "_patch_speedo_160mph.py",
+    "_patch_disable_cmpaint.py",
+    "_patch_forza_paint_mats.py",
+    "_bake_online_paint.py",
+    "_bake_skin_dds.py",
+    "_bake_dxt1_skins.py",
+    "_bake_dxt5_online.py",
+    "_dump_carpaint.py",
+    "_rank_mats.py",
+    "_nuke_black_paint.py",
+    "_restore_red_accents.py",
+    "_restore_black_trim.py",
+    "_rename_carpaint.py",
+    "_rank_paint_meshes.py",
+    "_dump_carpaint_live.py",
+    "_fix_bianco_multimap.py",
+    "_bake_skin_color.py",
+    "_body_metal_detail.dds",
     "data.acd.bak",
 }
-SKIP_SUFFIXES = {".bak", ".bak_stripe", ".bak_lcd", ".bak_speedo", ".bak_dx11", ".bak_blur"}
+SKIP_SUFFIXES = {".bak", ".bak_stripe", ".bak_lcd", ".bak_speedo", ".bak_dx11", ".bak_blur", ".bak_trim", ".bak_rename", ".bak_bianco"}
 # kn5/dds/jpg barely shrink; store them so a 1.6 GB track zip finishes in minutes.
 STORE_SUFFIXES = {
     ".kn5",

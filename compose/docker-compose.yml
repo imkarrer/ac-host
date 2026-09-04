@@ -97,9 +97,17 @@ services:
     environment:
       DISCORD_TOKEN: ${DISCORD_TOKEN:-}
       DISCORD_REQUIRED_ROLE: ${AUTH_REQUIRED_ROLE:-ac-practice}
+      DISCORD_ADMIN_ROLE: ${DISCORD_ADMIN_ROLE:-ac-admin}
+      DISCORD_REVIEW_CHANNEL_ID: ${DISCORD_REVIEW_CHANNEL_ID:-}
+      DISCORD_VERIFY_PROFILE: ${DISCORD_VERIFY_PROFILE:-1}
       WHITELIST_PATH: /data/whitelist.json
+      STEAM_REQUESTS_PATH: /data/steam_requests.json
+      AC_CONTENT: /content
+      AC_CATALOG: /catalog
     volumes:
       - ${AC_STATE}:/data
+      - ${AC_CONTENT}:/content:ro
+      - ../catalog:/catalog:ro
 
 volumes:
   ac-server:

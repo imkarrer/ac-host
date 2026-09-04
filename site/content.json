@@ -1,8 +1,8 @@
 {
   "cars": {
     "abarth_124_2016": {
-      "url": "__AC_124_RELEASE_URL__",
-      "version": "1.3"
+      "url": "https://github.com/imkarrer/ac-practice/releases/download/content/abarth_124_2016.zip",
+      "version": "2.2"
     }
   }
 }

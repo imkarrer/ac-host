@@ -25,7 +25,7 @@ class DetailsTests(unittest.TestCase):
             self.assertEqual(filled[0]["Skin"], "02_Bianco")
             self.assertEqual(filled[1]["Skin"], "")
 
-    def test_payload_advertises_booking_and_pickup(self):
+    def test_payload_advertises_practice_and_pickup(self):
         with tempfile.TemporaryDirectory() as raw:
             cfg = Path(raw) / "cfg"
             cfg.mkdir()
@@ -46,8 +46,8 @@ class DetailsTests(unittest.TestCase):
             with patch.object(details, "load_info", return_value={"timeleft": 100, "clients": 0}):
                 with patch.object(details, "load_players", return_value=[]):
                     payload = details.details_payload(cfg, content, 8181, "76561197961983498")
-            self.assertEqual(payload["session"], 0)
-            self.assertEqual(payload["sessiontypes"], [0])
+            self.assertEqual(payload["session"], 1)
+            self.assertEqual(payload["sessiontypes"], [1])
             self.assertTrue(payload["pickup"])
             cars = payload["players"]["Cars"]
             self.assertEqual(cars[0]["Skin"], "02_Bianco")
@@ -161,10 +161,21 @@ class DetailsTests(unittest.TestCase):
             self.assertNotIn("tracks", payload["content"])
 
     def test_json_roundtrip_session_type(self):
-        raw = json.dumps({"session": 0, "sessiontypes": [0], "pickup": True})
+        raw = json.dumps({"session": 1, "sessiontypes": [1], "pickup": True})
         data = json.loads(raw)
-        self.assertEqual(data["session"], 0)
-        self.assertEqual(data["sessiontypes"][0], 0)
+        self.assertEqual(data["session"], 1)
+        self.assertEqual(data["sessiontypes"][0], 1)
+
+    def test_log_skips_ok_and_not_found(self):
+        handler = details.DetailsHandler.__new__(details.DetailsHandler)
+        handler.address_string = lambda: "1.2.3.4"
+        with patch("builtins.print") as mock_print:
+            handler.log_message('"%s" %s %s', "GET /api/details HTTP/1.1", "200", "-")
+            handler.log_message('"%s" %s %s', "GET /favicon.ico HTTP/1.1", "404", "-")
+            handler.log_message('"%s" %s %s', "HEAD / HTTP/1.1", "501", "-")
+        printed = [call.args[0] for call in mock_print.call_args_list]
+        self.assertEqual(len(printed), 1)
+        self.assertIn("501", printed[0])
 
 
 if __name__ == "__main__":

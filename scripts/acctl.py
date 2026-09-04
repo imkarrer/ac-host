@@ -216,6 +216,8 @@ def render(track: str, mode: str, name: str, udp: int, http: int, out: Path) -> 
         str(out),
         "--content",
         str(content_dir()),
+        "--whitelist",
+        str(STATE / "whitelist.json"),
     ]
     skin_mode = os.environ.get("RENDER_SKIN_MODE")
     if skin_mode:
@@ -228,21 +230,47 @@ def dist_dir() -> Path:
 
 
 def sync_site_content() -> None:
-    """Write 124-only content.json into state/dist for the CM details sidecar."""
+    """Write 124-only content.json into state/dist for the CM details sidecar.
+
+    Prefer the version already in dist/content.json (from publish_124), then
+    ui_car.json on the content tree. Never hardcode an old version.
+    """
     dest = dist_dir()
     dest.mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, str(REPO / "scripts"))
     import settings
 
+    version = None
+    existing = dest / "content.json"
+    if existing.is_file():
+        try:
+            version = (
+                json.loads(existing.read_text(encoding="utf-8"))
+                .get("cars", {})
+                .get("abarth_124_2016", {})
+                .get("version")
+            )
+        except json.JSONDecodeError:
+            version = None
+    if not version:
+        ui_car = content_dir() / "cars" / "abarth_124_2016" / "ui" / "ui_car.json"
+        if ui_car.is_file():
+            try:
+                version = str(json.loads(ui_car.read_text(encoding="utf-8")).get("version") or "").strip()
+            except json.JSONDecodeError:
+                version = None
+    version = version or "1.5"
+
     payload = {
         "cars": {
             "abarth_124_2016": {
                 "url": settings.release_124_url(),
-                "version": "1.3",
+                "version": version,
             }
         }
     }
     (dest / "content.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    print(f"sync_site_content version={version} -> {dest / 'content.json'}")
 
 
 def content_dir() -> Path:

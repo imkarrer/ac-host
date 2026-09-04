@@ -21,6 +21,12 @@ def plugin_ports(udp: int) -> tuple[int, int]:
     return PLUGIN_LOCAL_START + slot, PLUGIN_EVENT_START + slot
 
 
+def register_to_lobby() -> int:
+    """1 = Kunos public list (every CM worldwide polls HTTP/details). 0 = join-link only."""
+    raw = os.environ.get("REGISTER_TO_LOBBY", "0").strip().lower()
+    return 1 if raw in ("1", "true", "yes", "on") else 0
+
+
 def load_track(catalog: Path, track_id: str) -> dict:
     path = catalog / "tracks" / f"{track_id}.json"
     if not path.is_file():
@@ -72,18 +78,72 @@ def skin_for_slot(model: str, index: int, mode: str, content: Path | None) -> st
     return PREFERRED_SKIN.get(model, "")
 
 
-def entry_list(cars: list[str], slots: int, *, skin_mode: str = "pinned", content: Path | None = None) -> str:
-    """Pickup slots: cycle allowed cars; skin assignment depends on skin_mode."""
+def entry_list(
+    cars: list[str],
+    slots: int,
+    *,
+    skin_mode: str = "cycle",
+    content: Path | None = None,
+    reservations: list[dict[str, str]] | None = None,
+) -> str:
+    """Pickup slots: GUID-reserved liveries first, then open pits.
+
+    Open pits use ``skin_mode``:
+    - ``cycle`` (default): each MODEL walks its skin list so N joiners without a
+      preference get different colors for that car.
+    - ``pinned``: every open pit uses PREFERRED_SKIN for that model.
+    - ``empty``: SKIN= blank (pickup falls back to first folder — avoid on prod).
+    """
     if not cars:
         cars = [""]
-    blocks = []
-    for i in range(slots):
-        model = cars[i % len(cars)]
-        skin = skin_for_slot(model, i, skin_mode, content)
+    car_set = set(cars)
+    blocks: list[str] = []
+
+    for pref in reservations or []:
+        if len(blocks) >= slots:
+            break
+        model = pref.get("car") or ""
+        skin = pref.get("skin") or ""
+        guid = pref.get("steam_id") or ""
+        if model not in car_set or not skin or not guid:
+            continue
+        if content is not None:
+            allowed = list_skins(content, model)
+            if allowed and skin not in allowed:
+                continue
         blocks.append(
             "\n".join(
                 [
-                    f"[CAR_{i}]",
+                    f"[CAR_{len(blocks)}]",
+                    f"MODEL={model}",
+                    f"SKIN={skin}",
+                    "SPECTATOR_MODE=0",
+                    "DRIVERNAME=",
+                    "TEAM=",
+                    f"GUID={guid}",
+                    "BALLAST=0",
+                    "RESTRICTOR=0",
+                ]
+            )
+        )
+
+    # Per-model skin cursor so 124 pits cycle Rosso/Nero/Bianco/... independently
+    # of GR86/Civic slot indices in the shared open-pit loop.
+    model_skin_i: dict[str, int] = {}
+    open_index = 0
+    while len(blocks) < slots:
+        model = cars[open_index % len(cars)]
+        open_index += 1
+        if skin_mode == "cycle":
+            i = model_skin_i.get(model, 0)
+            skin = skin_for_slot(model, i, skin_mode, content)
+            model_skin_i[model] = i + 1
+        else:
+            skin = skin_for_slot(model, open_index - 1, skin_mode, content)
+        blocks.append(
+            "\n".join(
+                [
+                    f"[CAR_{len(blocks)}]",
                     f"MODEL={model}",
                     f"SKIN={skin}",
                     "SPECTATOR_MODE=0",
@@ -109,10 +169,12 @@ def server_cfg(
     auth: str,
     admin_password: str,
     loop: int,
+    register: int | None = None,
 ) -> str:
     cars = ";".join(track["cars"])
     auth_line = f"{auth}/?" if auth else ""
     plugin_local, plugin_event = plugin_ports(udp)
+    listed = 1 if (register if register is not None else register_to_lobby()) else 0
     sessions = [
         "[PRACTICE]",
         "NAME=Practice",
@@ -170,9 +232,9 @@ def server_cfg(
             "TC_ALLOWED=1",
             "STABILITY_ALLOWED=0",
             "AUTOCLUTCH_ALLOWED=0",
-            "TYRE_BLANKETS_ALLOWED=0",
+            "TYRE_BLANKETS_ALLOWED=1",
             "FORCE_VIRTUAL_MIRROR=1",
-            "REGISTER_TO_LOBBY=1",
+            f"REGISTER_TO_LOBBY={listed}",
             f"MAX_CLIENTS={track['maxClients']}",
             f"UDP_PLUGIN_LOCAL_PORT={plugin_local}",
             f"UDP_PLUGIN_ADDRESS=127.0.0.1:{plugin_event}",
@@ -233,11 +295,28 @@ def main() -> None:
         default=None,
         help="How to fill SKIN= in entry_list (default: RENDER_SKIN_MODE or pinned).",
     )
+    parser.add_argument(
+        "--whitelist",
+        type=Path,
+        default=None,
+        help="whitelist.json with optional per-player livery {car,skin} reservations",
+    )
     args = parser.parse_args()
 
     track = load_track(args.catalog, args.track)
     admin = os.environ.get("AC_ADMIN_PASSWORD", "change-me")
-    skin_mode = args.skin_mode or os.environ.get("RENDER_SKIN_MODE", "pinned")
+    skin_mode = args.skin_mode or os.environ.get("RENDER_SKIN_MODE", "cycle")
+    whitelist = args.whitelist
+    if whitelist is None:
+        state = Path(os.environ.get("AC_STATE", ""))
+        candidate = state / "whitelist.json" if str(state) else Path()
+        whitelist = candidate if candidate.is_file() else None
+    reservations: list[dict[str, str]] = []
+    if whitelist and whitelist.is_file():
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import car_skins
+
+        reservations = car_skins.load_livery_reservations(whitelist)
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "server_cfg.ini").write_text(
         server_cfg(
@@ -254,7 +333,13 @@ def main() -> None:
         encoding="utf-8",
     )
     (args.out / "entry_list.ini").write_text(
-        entry_list(track["cars"], int(track["maxClients"]), skin_mode=skin_mode, content=args.content),
+        entry_list(
+            track["cars"],
+            int(track["maxClients"]),
+            skin_mode=skin_mode,
+            content=args.content,
+            reservations=reservations,
+        ),
         encoding="utf-8",
     )
     (args.out / "welcome.txt").write_text(

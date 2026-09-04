@@ -278,6 +278,37 @@ class BoardTests(unittest.TestCase):
             )
             self.assertEqual(plugin.slot_from_cfg(cfg), 8)
 
+    def test_max_cars_for_slot_reads_ini(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            cfg = root / "static" / "brainerd-competition" / "cfg"
+            cfg.mkdir(parents=True)
+            (cfg / "server_cfg.ini").write_text(
+                "[SERVER]\nUDP_PORT=9601\nHTTP_PORT=8082\nMAX_CLIENTS=16\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(plugin.max_cars_for_slot(root, 1), 16)
+            self.assertEqual(plugin.max_cars_for_slot(root, 0), plugin.MAX_CAR_ID)
+
+    def test_ask_all_cars_stops_at_max_clients(self) -> None:
+        with patch("push_status.schedule_push"):
+            with tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                cfg = root / "static" / "brainerd-competition" / "cfg"
+                cfg.mkdir(parents=True)
+                (cfg / "server_cfg.ini").write_text(
+                    "[SERVER]\nUDP_PORT=9601\nHTTP_PORT=8082\nMAX_CLIENTS=16\n",
+                    encoding="utf-8",
+                )
+                catalog = root / "catalog"
+                catalog.mkdir()
+                (catalog / "statics.json").write_text('{"lobbies":[]}\n', encoding="utf-8")
+                sidecar = plugin.Plugin(state=root, catalog=catalog, dist=root / "dist", slots=[1])
+                asked: list[int] = []
+                sidecar.send = lambda slot, payload: asked.append(payload[1])
+                sidecar.ask_all_cars(1)
+                self.assertEqual(asked, list(range(16)))
+
 
 if __name__ == "__main__":
     unittest.main()

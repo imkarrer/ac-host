@@ -2,13 +2,10 @@
 """Content Manager extended-details HTTP for Kunos acServer.
 
 CM only fetches this when the server name contains ℹ<port>.
-The Online livery thumbnail row is bound to CurrentSessionType == Booking
-(OnlineServer.xaml). Vanilla INFO reports Practice (type 1), so that row is
-hidden and clicking the car only zooms the preview.
+We advertise Practice (session type 1) so the Online "Skin for booking"
+thumbnail row stays hidden — pickup cannot honor that pick anyway.
 
-For /api/details, `session` is the session *type* (not an INFO index). Advertise
-Booking (0) so the row appears, but keep pickup=true so Join is a direct
-connect (acServer SUB returns FAILED_PICKUP on pickup lobbies).
+Keep pickup=true and still embed content.json for CM auto-download of the 124.
 """
 
 from __future__ import annotations
@@ -200,9 +197,10 @@ def details_payload(
         "track": server.get("TRACK") or info.get("track") or "",
         "cars": cars,
         "timeofday": info.get("timeofday") if info.get("timeofday") is not None else 48,
-        # Type 0 = Booking. CM OnlineServer.xaml only shows the skin strip then.
-        "session": 0,
-        "sessiontypes": [0],
+        # Type 1 = Practice. Do not advertise Booking (0): that shows a skin
+        # strip CM cannot apply on pickup lobbies.
+        "session": 1,
+        "sessiontypes": [1],
         "durations": [int(timeleft)],
         "timeleft": timeleft,
         "country": info.get("country") or ["na", "na"],
@@ -217,8 +215,7 @@ def details_payload(
         "players": {"Cars": slots},
         "content": load_cm_content(server.get("TRACK") or info.get("track") or ""),
         "description": (
-            "Online livery thumbnails are cosmetic on this pickup server — "
-            "spawn uses the pit default (Bianco / Trueno Blue / Championship White).\n"
+            "Practice lobby — install content from the player page, then Join.\n"
             + (
                 os.environ.get("AC_PAGES_URL")
                 or os.environ.get("AC_CONTENT_URL")
@@ -261,7 +258,11 @@ class DetailsHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def log_message(self, fmt: str, *args) -> None:
-        print(f"{self.address_string()} {fmt % args}")
+        msg = fmt % args
+        # CM / scanners produce tens of thousands of these a day; keep errors only.
+        if '" 200 ' in msg or '" 404 ' in msg:
+            return
+        print(f"{self.address_string()} {msg}")
 
 
 class DetailsServer(ThreadingHTTPServer):

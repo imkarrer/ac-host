@@ -1,6 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from render_cfg import plugin_ports, server_cfg
@@ -22,9 +23,32 @@ class RenderCfgPluginTests(unittest.TestCase):
             auth="127.0.0.1:18080",
             admin_password="x",
             loop=1,
+            register=0,
         )
         self.assertIn("UDP_PLUGIN_LOCAL_PORT=11200", text)
         self.assertIn("UDP_PLUGIN_ADDRESS=127.0.0.1:11300", text)
+        self.assertIn("TYRE_BLANKETS_ALLOWED=1", text)
+        self.assertIn("REGISTER_TO_LOBBY=0", text)
+
+    def test_register_to_lobby_env(self) -> None:
+        from render_cfg import register_to_lobby, server_cfg
+
+        with patch.dict("os.environ", {"REGISTER_TO_LOBBY": "1"}):
+            self.assertEqual(register_to_lobby(), 1)
+            text = server_cfg(
+                name="Practice — Blackhawk Farms",
+                track={"folder": "slipangle_ggt", "layout": "", "cars": ["abarth_124_2016"], "maxClients": 24},
+                mode="practice",
+                udp=9600,
+                tcp=9600,
+                http=8081,
+                auth="127.0.0.1:18080",
+                admin_password="x",
+                loop=1,
+            )
+            self.assertIn("REGISTER_TO_LOBBY=1", text)
+        with patch.dict("os.environ", {"REGISTER_TO_LOBBY": "0"}):
+            self.assertEqual(register_to_lobby(), 0)
 
 
 if __name__ == "__main__":

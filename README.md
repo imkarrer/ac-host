@@ -55,6 +55,10 @@ python scripts/publish_124.py --owner "$AC_GITHUB_OWNER"
 
 Prefer slot-scoped UniFi forwards (`UNIFI_PF=1`) — see [`docs/plan-unifi-portforwards.md`](docs/plan-unifi-portforwards.md). Do not leave broad ranges open. **8099 is unused.**
 
+## Discord whitelist bot
+
+See [`bot/README.md`](bot/README.md). Set `DISCORD_TOKEN` in `/var/lib/ac-host/.env`, create role `ac-practice`, then `docker compose --profile bot up -d --build bot`.
+
 ## License
 
 MIT for this repo’s scripts and Nix. Assetto Corsa, cars, and tracks remain their owners’ property; this repo does not redistribute game assets.
