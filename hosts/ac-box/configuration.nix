@@ -20,7 +20,9 @@ in
   time.timeZone = "America/Chicago";
 
   boot.loader.systemd-boot.enable = true;
+  boot.loader.systemd-boot.configurationLimit = 5;
   boot.loader.efi.canTouchEfiVariables = true;
+  boot.tmp.cleanOnBoot = true;
 
   nix.settings.experimental-features = [
     "nix-command"
@@ -31,6 +33,18 @@ in
     "nixosuser"
     "ac"
   ];
+  nix.settings.auto-optimise-store = true;
+  nix.gc = {
+    automatic = true;
+    dates = "weekly";
+    options = "--delete-older-than 7d";
+  };
+  nix.optimise.automatic = true;
+
+  services.journald.extraConfig = ''
+    SystemMaxUse=200M
+    MaxRetentionSec=14day
+  '';
 
   services.openssh = {
     enable = true;

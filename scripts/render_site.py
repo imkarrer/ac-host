@@ -75,6 +75,7 @@ def substitute(text: str) -> str:
         "__AC_JOIN_8082__": settings.join_url(8082),
         "__AC_JOIN_8083__": settings.join_url(8083),
         "__AC_JOIN_8089__": settings.join_url(8089),
+        "__AC_DISCORD_INVITE__": settings.discord_invite_url(),
         "__AC_DISCORD_CHANNEL__": settings.discord_channel_url(),
         "__AC_DISCORD_FEATURE_REQUESTS__": settings.discord_feature_requests_url(),
         "__AC_CARS_LIST__": practice_car_list_html(),
@@ -113,6 +114,10 @@ def main() -> None:
     )
     args = parser.parse_args()
     load_env_files()
+    if not settings.discord_invite_url():
+        raise SystemExit(
+            "DISCORD_INVITE_URL is not set. Run scripts/setup_discord.py and put the printed URL in .env."
+        )
 
     src = REPO / "site"
     out = src if args.in_place else args.out

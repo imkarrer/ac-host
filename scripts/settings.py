@@ -110,6 +110,11 @@ def join_url(http_port: int) -> str:
     return f"https://acstuff.ru/s/q:race/online/join?ip={public_ip()}&httpPort={http_port}"
 
 
+def discord_invite_url() -> str:
+    """Never-expire discord.gg invite (max_age=0). Created by setup_discord.py."""
+    return getenv("DISCORD_INVITE_URL", "https://discord.gg/Rh7vevrUYy")
+
+
 def discord_channel_url() -> str:
     """Deep link to the Discord channel where /steam-request is used."""
     return getenv(

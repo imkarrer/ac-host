@@ -132,7 +132,10 @@ in
     enable = true;
     listenAddress = "127.0.0.1";
     port = 9090;
-    retentionTime = "30d";
+    # Size wins if it fills first. 2GB is a hard ceiling; WAL can sit a bit above it.
+    retentionTime = "14d";
+    extraFlags = [ "--storage.tsdb.retention.size=2GB" ];
+    globalConfig.scrape_interval = "30s";
     alertmanagers = [
       {
         static_configs = [
@@ -144,15 +147,45 @@ in
       {
         job_name = "node";
         static_configs = [ { targets = [ "127.0.0.1:9100" ]; } ];
+        metric_relabel_configs = [
+          {
+            source_labels = [ "__name__" ];
+            regex = "up|node_cpu_seconds_total|node_memory_MemTotal_bytes|node_memory_MemAvailable_bytes|node_filesystem_avail_bytes|node_filesystem_size_bytes|node_load1|node_load5|node_load15|node_systemd_unit_state";
+            action = "keep";
+          }
+        ];
       }
       {
         job_name = "cadvisor";
         static_configs = [ { targets = [ "127.0.0.1:9102" ]; } ];
+        metric_relabel_configs = [
+          {
+            source_labels = [ "__name__" ];
+            regex = "up|container_cpu_usage_seconds_total|container_memory_working_set_bytes";
+            action = "keep";
+          }
+          {
+            source_labels = [ "cpu" ];
+            regex = "[0-9]+";
+            action = "drop";
+          }
+          {
+            regex = "container_label_.*";
+            action = "labeldrop";
+          }
+        ];
       }
       {
         job_name = "unpoller";
         scrape_interval = "30s";
         static_configs = [ { targets = [ "127.0.0.1:9130" ]; } ];
+        metric_relabel_configs = [
+          {
+            source_labels = [ "__name__" ];
+            regex = "up|unpoller_device_cpu_utilization_ratio|unpoller_device_memory_utilization_ratio|unpoller_device_wan_.*";
+            action = "keep";
+          }
+        ];
       }
       {
         job_name = "udr-fw";
@@ -161,7 +194,7 @@ in
       }
       {
         job_name = "docker-names";
-        scrape_interval = "15s";
+        scrape_interval = "30s";
         static_configs = [ { targets = [ "127.0.0.1:9132" ]; } ];
       }
     ];

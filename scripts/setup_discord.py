@@ -24,6 +24,7 @@ PRACTICE_ROLE_NAME = os.environ.get("DISCORD_REQUIRED_ROLE", "ac-practice")
 MARKER = "fugazy-setup"
 
 # https://discord.com/developers/docs/topics/permissions
+CREATE_INSTANT_INVITE = 1 << 0
 VIEW_CHANNEL = 1 << 10
 SEND_MESSAGES = 1 << 11
 MANAGE_MESSAGES = 1 << 13
@@ -39,7 +40,8 @@ USE_SLASH = 1 << 31
 PIN_MESSAGES = 1 << 51
 
 INVITE_PERMS = (
-    MANAGE_CHANNELS
+    CREATE_INSTANT_INVITE
+    | MANAGE_CHANNELS
     | VIEW_CHANNEL
     | SEND_MESSAGES
     | MANAGE_MESSAGES
@@ -177,6 +179,64 @@ def ensure_channel(
     return created
 
 
+def invite_url(code: str) -> str:
+    return f"https://discord.gg/{code}"
+
+
+def pick_permanent_invite(invites: list) -> str | None:
+    """Reuse a never-expire / unlimited invite if one already exists."""
+    for inv in invites:
+        if not isinstance(inv, dict):
+            continue
+        if int(inv.get("max_age") or 0) != 0:
+            continue
+        if int(inv.get("max_uses") or 0) != 0:
+            continue
+        if inv.get("temporary"):
+            continue
+        code = str(inv.get("code") or "").strip()
+        if code:
+            return invite_url(code)
+    return None
+
+
+def vanity_invite_url(guild_id: str) -> str | None:
+    try:
+        data = request("GET", f"/guilds/{guild_id}/vanity-url")
+    except DiscordError as exc:
+        if exc.status in (403, 404):
+            return None
+        raise
+    if not isinstance(data, dict):
+        return None
+    code = str(data.get("code") or "").strip()
+    return invite_url(code) if code else None
+
+
+def ensure_permanent_invite(channel: dict, guild_id: str) -> str:
+    """Guild vanity if set, else a max_age=0 / max_uses=0 invite on #welcome."""
+    vanity = vanity_invite_url(guild_id)
+    if vanity:
+        print(f"ok vanity invite {vanity}")
+        return vanity
+    listed = request("GET", f"/channels/{channel['id']}/invites")
+    if isinstance(listed, list):
+        existing = pick_permanent_invite(listed)
+        if existing:
+            print(f"ok invite {existing} on #{channel.get('name')}")
+            return existing
+    created = request(
+        "POST",
+        f"/channels/{channel['id']}/invites",
+        {"max_age": 0, "max_uses": 0, "unique": False, "temporary": False},
+    )
+    if not isinstance(created, dict) or not created.get("code"):
+        raise DiscordError(500, "invite create returned no code", f"/channels/{channel['id']}/invites")
+    url = invite_url(str(created["code"]))
+    print(f"created invite {url} on #{channel.get('name')}")
+    return url
+
+
 def set_overwrites(channel: dict, updates: list[dict]) -> None:
     merged = merge_overwrites(channel.get("permission_overwrites") or [], updates)
     try:
@@ -236,7 +296,8 @@ def welcome_text() -> str:
         "**2 — Drive**\n"
         "Install [Content Manager](https://github.com/gro-ove/actools/releases/latest) "
         "and [CSP](https://acstuff.club/patch/) (0.2.11).\n"
-        f"Join from [the player page]({PAGES_URL}) or the buttons in **#server-status**.\n"
+        f"Join Discord from [the player page]({PAGES_URL}) (permanent invite), "
+        "then the lobby buttons in **#server-status**.\n"
         "After join: **Download missing content**. empty = nobody. A name = someone’s in.\n"
         "Tracks (drop on Content Manager):\n"
         "• [Blackhawk](https://github.com/imkarrer/ac-practice/releases/download/content/slipangle_ggt.zip)\n"
@@ -352,7 +413,7 @@ def main() -> int:
         [
             overwrite(everyone["id"], OVERWRITE_ROLE, allow=announce_everyone, deny=SEND_MESSAGES),
             overwrite(admin["id"], OVERWRITE_ROLE, allow=announce_staff),
-            overwrite(bot_id, OVERWRITE_MEMBER, allow=announce_staff),
+            overwrite(bot_id, OVERWRITE_MEMBER, allow=announce_staff | CREATE_INSTANT_INVITE),
         ],
     )
     set_overwrites(
@@ -393,6 +454,16 @@ def main() -> int:
         {"id": created["staff"]["id"], "position": 1},
     ]
     request("PATCH", f"/guilds/{guild_id}/channels", positions)
+
+    invite = ""
+    try:
+        invite = ensure_permanent_invite(created["welcome"], guild_id)
+    except DiscordError as exc:
+        extra = (
+            "https://discord.com/oauth2/authorize"
+            f"?client_id={bot_id}&scope=bot%20applications.commands&permissions={INVITE_PERMS}"
+        )
+        print(f"skip permanent invite ({exc.status}). Grant Create Instant Invite, then re-run:\n  {extra}")
 
     upsert_pin(created["welcome"], "welcome", "Welcome to Fugazy Sim Racing", welcome_text())
     upsert_pin(created["staff"], "staff", "Staff", staff_text())
@@ -445,6 +516,7 @@ def main() -> int:
         "clips_and_highlights": created["clips-and-highlights"]["id"],
         "ac_whitelist": created["ac-whitelist"]["id"],
         "staff": created["staff"]["id"],
+        "invite": invite,
     }
     print("REPORT " + json.dumps(report))
     print(f"DISCORD_REVIEW_CHANNEL_ID={report['ac_whitelist']}")
@@ -453,6 +525,8 @@ def main() -> int:
         "DISCORD_FEATURE_REQUESTS_URL="
         f"https://discord.com/channels/{guild_id}/{report['feature_requests']}"
     )
+    if invite:
+        print(f"DISCORD_INVITE_URL={invite}")
     return 0
 
 

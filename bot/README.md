@@ -29,7 +29,7 @@ On approve, the bot writes `whitelist.json` (`enabled: true`) and tries to grant
 
 1. https://discord.com/developers/applications → New Application → Bot → copy token.
 2. Enable **Server Members Intent**.
-3. OAuth2 URL Generator: scopes `bot` + `applications.commands`; permissions Manage Channels, Manage Roles, Send Messages, Manage Messages, Embed Links, Read Message History, Use Slash Commands.
+3. OAuth2 URL Generator: scopes `bot` + `applications.commands`; permissions Create Instant Invite, Manage Channels, Manage Roles, Send Messages, Manage Messages, Embed Links, Read Message History, Use Slash Commands.
 4. Invite the bot. Create roles **`ac-admin`** and **`ac-practice`**. Put the bot’s role **above** `ac-practice` if it should assign that role.
 5. Run `scripts/setup_discord.py` inside the bot container to create `#welcome`, `#server-status`, `#now-driving`, `#setups-and-help`, private `#ac-whitelist` / `#staff`, and pinned posts. It prints `DISCORD_REVIEW_CHANNEL_ID` — put that in `/var/lib/ac-host/.env` and restart the bot.
 
