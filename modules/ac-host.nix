@@ -27,6 +27,17 @@ in
       description = "Whitelist, generated cfg, results, and content live here.";
     };
 
+    buildDir = lib.mkOption {
+      type = lib.types.path;
+      default = "/var/lib/ac-host/build";
+      description = ''
+        Full car folders (models included) used to generate numbered series
+        liveries and to pack the car zip. Kept apart from stateDir/content,
+        which is deliberately slim: the dedicated server only needs data.acd
+        and skins, but placing a race number needs the car's .kn5.
+      '';
+    };
+
     authOpen = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -97,6 +108,13 @@ in
       "d ${cfg.stateDir}/dist 0755 root root -"
       "d ${cfg.stateDir}/static 0755 root root -"
       "d ${cfg.stateDir}/races 0755 root root -"
+      "d ${cfg.stateDir}/series 0755 root root -"
+      # GitHub token for publishing the series race pack. Copied by hand, never git.
+      "d ${cfg.stateDir}/secrets 0700 root root -"
+      "d ${cfg.buildDir} 0755 root root -"
+      "d ${cfg.buildDir}/content 0755 root root -"
+      "d ${cfg.buildDir}/content/cars 0755 root root -"
+      "d ${cfg.buildDir}/dist 0755 root root -"
       "d ${cfg.repoDir} 0755 root root -"
     ];
 
@@ -114,6 +132,8 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
+        # If a sidecar rebuild ever hangs again, fail instead of blocking boot forever.
+        TimeoutStartSec = "15min";
         WorkingDirectory = cfg.repoDir;
         Environment = [
           "AC_STATE=${cfg.stateDir}"

@@ -115,6 +115,46 @@ class BoardTests(unittest.TestCase):
                 self.assertTrue(mock_push.called)
                 pushed = mock_push.call_args[0][0]
                 self.assertIn("76561198000000001", pushed)
+                saved = json.loads(pushed)
+                self.assertEqual(saved["status"], "up")
+                self.assertTrue(saved["aliveAt"])
+
+    def test_save_reads_maintenance_flag(self) -> None:
+        with patch("push_status.schedule_push"):
+            with tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                (root / "maintenance.json").write_text(
+                    json.dumps({"message": "NIC swap"}),
+                    encoding="utf-8",
+                )
+                board = plugin.Leaderboard(
+                    path=root / "leaderboard.json",
+                    dist=root / "dist" / "leaderboard.json",
+                    statics=[{"id": "blackhawk", "name": "Blackhawk", "track": "blackhawk"}],
+                    car_names={},
+                )
+                board.save()
+                data = json.loads((root / "dist" / "leaderboard.json").read_text(encoding="utf-8"))
+                self.assertEqual(data["status"], "maintenance")
+                self.assertEqual(data["statusMessage"], "NIC swap")
+
+    def test_touch_alive_heartbeats_without_github_push(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            board = plugin.Leaderboard(
+                path=root / "leaderboard.json",
+                dist=root / "dist" / "leaderboard.json",
+                statics=[{"id": "blackhawk", "name": "Blackhawk", "track": "blackhawk"}],
+                car_names={},
+            )
+            with patch("push_status.schedule_push") as mock_push, patch(
+                "push_status.notify_heartbeat"
+            ) as mock_beat:
+                board.touch_alive()
+                self.assertTrue(mock_beat.called)
+                self.assertFalse(mock_push.called)
+                data = json.loads((root / "leaderboard.json").read_text(encoding="utf-8"))
+                self.assertTrue(data["aliveAt"])
 
     def test_leaderboard_persists_and_session_reset(self) -> None:
         with patch("push_status.schedule_push"):

@@ -1,0 +1,19 @@
+# compose build context is this tree. Sidecar/bot only COPY a handful of
+# Python files — sending content/ and dist/ makes boot hang for minutes.
+.git
+**/.git
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+content
+state
+state-dev
+dist
+site
+docs
+.cursor
+mods
+catalog/race_numbers
+*.zip
+*.7z
+*.kn5

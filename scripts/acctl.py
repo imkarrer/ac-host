@@ -9,9 +9,17 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
+SERVER_IMAGE = "ac-host-server:latest"
+SIDECAR_IMAGE = "ac-host-auth:latest"
+
 REPO = Path(__file__).resolve().parents[1]
+if str(REPO / "shared") not in sys.path:
+    sys.path.insert(0, str(REPO / "shared"))
+if str(REPO / "sidecar") not in sys.path:
+    sys.path.insert(0, str(REPO / "sidecar"))
 COMPOSE = REPO / "compose" / "docker-compose.yml"
 CATALOG = REPO / "catalog"
 GAME_START = 9600
@@ -120,6 +128,8 @@ def compose(*args: str) -> None:
     env = os.environ.copy()
     env.setdefault("AC_STATE", str(STATE))
     env.setdefault("AC_CONTENT", str(content_dir()))
+    # Full car folders for numbered-livery generation; see services.ac-host.buildDir.
+    env.setdefault("AC_BUILD", str(STATE / "build"))
     env.setdefault("COMPOSE_PROJECT_NAME", COMPOSE_PROJECT)
     env.setdefault("AC_CATALOG_STATICS", ENV_PROFILES[AC_ENV]["statics"])
     cmd = compose_cmd() + ["-f", str(COMPOSE)]
@@ -257,6 +267,7 @@ def sync_site_content() -> None:
         settings.github_pages_repo(),
         car_version=version,
         car_url=settings.release_124_url(),
+        content_root=content_dir(),
     )
     print(f"sync_site_content version={version} -> {dest / 'content.json'}")
 
@@ -287,8 +298,99 @@ def docker_volume(name: str) -> str:
     return f"ac-host_{name}"
 
 
+def docker_image_exists(name: str) -> bool:
+    result = subprocess.run(
+        ["docker", "image", "inspect", name],
+        check=False,
+        capture_output=True,
+    )
+    return result.returncode == 0
+
+
+def sidecar_up_args(service: str, *, rebuild: bool) -> list[str]:
+    args = ["up", "-d"]
+    if rebuild:
+        args.append("--build")
+    args.append(service)
+    return args
+
+
+def need_sidecar_rebuild() -> bool:
+    return not docker_image_exists(SIDECAR_IMAGE)
+
+
 def ensure_image() -> None:
+    """Build the Kunos server image only when it is missing.
+
+    Boot used to `compose build static` every time. That walks the ac-host
+    tree (cars, zips, dist) and hung ac-host-static for minutes after reboot.
+    """
+    if docker_image_exists(SERVER_IMAGE):
+        print(f"using existing {SERVER_IMAGE}", file=sys.stderr)
+        return
     compose("--profile", "build", "build", "static")
+
+
+def publish_health(*, on: bool, message: str = "") -> None:
+    """Write the player-page flag and flush GitHub immediately (no 25s debounce)."""
+    import server_health
+
+    if on:
+        server_health.write_flag(STATE, message)
+    else:
+        server_health.clear_flag(STATE)
+    path = STATE / "leaderboard.json"
+    payload: dict = {}
+    if path.is_file():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                payload = loaded
+        except (OSError, json.JSONDecodeError):
+            payload = {}
+    server_health.apply_to_payload(payload, STATE)
+    text = json.dumps(payload, indent=2) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    dist = STATE / "dist" / "leaderboard.json"
+    dist.parent.mkdir(parents=True, exist_ok=True)
+    dist.write_text(text, encoding="utf-8")
+    try:
+        from push_status import get_pusher
+
+        get_pusher().flush_now(text)
+        print(f"status flushed {path} health={'maintenance' if on else 'up'}")
+    except Exception as exc:
+        try:
+            from push_status import schedule_push
+
+            schedule_push(text)
+            print(f"status queued {path}: {exc}", file=sys.stderr)
+        except Exception as inner:
+            print(f"status push skipped: {inner}", file=sys.stderr)
+
+
+def wait_lobby_http(*, timeout_sec: float = 90.0) -> bool:
+    from urllib.error import URLError
+    from urllib.request import urlopen
+
+    ports = [HTTP_START + int(item["slot"]) for item in load_statics()]
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        missing = []
+        for port in ports:
+            try:
+                with urlopen(f"http://127.0.0.1:{port}/", timeout=2) as resp:
+                    if getattr(resp, "status", 200) >= 400:
+                        missing.append(port)
+            except (URLError, OSError, TimeoutError):
+                missing.append(port)
+        if not missing:
+            print(f"lobby http ready {ports}")
+            return True
+        time.sleep(2)
+    print(f"lobby http still down after {timeout_sec:.0f}s", file=sys.stderr)
+    return False
 
 
 def run_server_container(*, name: str, cfg: Path, results: Path) -> None:
@@ -366,10 +468,13 @@ def cmd_recycle_static(args: argparse.Namespace) -> None:
 
 
 def cmd_up_static(args: argparse.Namespace) -> None:
+    rebuild = bool(getattr(args, "rebuild", False) or need_sidecar_rebuild())
+    if rebuild:
+        print("sidecar rebuild: missing image or --rebuild", file=sys.stderr)
     sync_site_content()
-    compose("up", "-d", "--build", "auth")
+    compose(*sidecar_up_args("auth", rebuild=rebuild))
     try:
-        compose("up", "-d", "--build", "plugin")
+        compose(*sidecar_up_args("plugin", rebuild=rebuild))
     except subprocess.CalledProcessError:
         print("leaderboard plugin skipped (compose has no plugin service?)", file=sys.stderr)
     ensure_image()
@@ -391,15 +496,20 @@ def cmd_up_static(args: argparse.Namespace) -> None:
             f"static {lobby['id']} on {udp}/{http} details={details} "
             f"track={lobby['track']} env={AC_ENV}"
         )
-    compose("up", "-d", "--build", "details")
+    compose(*sidecar_up_args("details", rebuild=rebuild))
     content_path = dist_dir() / "content.json"
     if content_path.is_file():
         print(f"cm content: {content_path}")
     else:
         print("warning: state/dist/content.json missing", file=sys.stderr)
+    if not args.only:
+        wait_lobby_http()
+        publish_health(on=False)
 
 
 def cmd_down_static(args: argparse.Namespace) -> None:
+    if not args.only and not getattr(args, "skip_health", False):
+        publish_health(on=True, message="Practice servers are restarting.")
     for lobby in selected_statics(args.only):
         subprocess.run(["docker", "rm", "-f", static_container(lobby["id"])], check=False)
         unifi_close_slot(int(lobby["slot"]))
@@ -438,8 +548,41 @@ def cmd_stop_race(args: argparse.Namespace) -> None:
         unifi_close_slot(int(info["slot"]))
 
 
+def cmd_maintenance(args: argparse.Namespace) -> None:
+    """Flip the player-page red/green light without recycling lobbies."""
+    if args.on:
+        publish_health(on=True, message=(args.message or "").strip())
+        print("maintenance on")
+    else:
+        publish_health(on=False)
+        print("maintenance off")
+
+
+def cmd_drain(args: argparse.Namespace) -> None:
+    """Paint the page red, then stop practice lobbies. Plugin stays up."""
+    publish_health(on=True, message=(args.message or "").strip() or "Practice servers are restarting.")
+    args.only = None
+    args.auth = False
+    args.all = False
+    args.skip_health = True
+    cmd_down_static(args)
+
+
+def cmd_resume(args: argparse.Namespace) -> None:
+    """Start practice from existing images and clear the maintenance banner."""
+    args.only = None
+    args.rebuild = False
+    cmd_up_static(args)
+
+
 def cmd_status(_: argparse.Namespace) -> None:
-    print(f"env={AC_ENV} state={STATE} compose={COMPOSE_PROJECT}")
+    import server_health
+
+    flag = server_health.read_flag(STATE)
+    health = "maintenance" if flag else "up"
+    print(f"env={AC_ENV} state={STATE} compose={COMPOSE_PROJECT} health={health}")
+    if flag:
+        print(f"maintenance: {flag.get('message') or server_health.DEFAULT_MESSAGE}")
     compose("ps")
     for lobby in load_statics():
         udp, http, details = ports_for_slot(int(lobby["slot"]))
@@ -470,6 +613,11 @@ def main() -> None:
 
     up = sub.add_parser("up-static", help="Render cfg and start auth + all static practice lobbies")
     up.add_argument("--only", default=None, help="Start one static lobby id")
+    up.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Rebuild sidecar images (auth/plugin/details). Boot must not do this.",
+    )
     up.set_defaults(func=cmd_up_static)
 
     down = sub.add_parser("down-static")
@@ -490,6 +638,20 @@ def main() -> None:
 
     st = sub.add_parser("status")
     st.set_defaults(func=cmd_status)
+
+    maint = sub.add_parser("maintenance", help="Red/green player-page light (does not stop lobbies)")
+    maint_on = maint.add_mutually_exclusive_group(required=True)
+    maint_on.add_argument("--on", action="store_true", help="Show down / maintenance on the player page")
+    maint_on.add_argument("--off", action="store_true", help="Clear maintenance; light follows the plugin heartbeat")
+    maint.add_argument("--message", default="", help="Banner text while --on")
+    maint.set_defaults(func=cmd_maintenance)
+
+    drain = sub.add_parser("drain", help="Maintenance banner, then stop practice lobbies (plugin stays)")
+    drain.add_argument("--message", default="", help="Player-page banner")
+    drain.set_defaults(func=cmd_drain)
+
+    resume = sub.add_parser("resume", help="Start practice from existing images and clear the banner")
+    resume.set_defaults(func=cmd_resume)
 
     rp = sub.add_parser("restart-plugin", help="Restart leaderboard plugin only (no lobby kick)")
     rp.set_defaults(func=cmd_restart_plugin)

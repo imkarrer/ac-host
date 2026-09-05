@@ -126,6 +126,19 @@ def pages_href(pages_url: str) -> str:
     return (pages_url or "").strip().rstrip("/") + "/"
 
 
+def box_status(board: dict | None) -> dict:
+    status = str((board or {}).get("status") or "").strip().lower()
+    message = str((board or {}).get("statusMessage") or "").strip()
+    if status in ("maintenance", "down"):
+        label = "Down for maintenance" if status == "maintenance" else "Down"
+        return {
+            "down": True,
+            "label": label,
+            "message": message or "Practice servers are down for maintenance.",
+        }
+    return {"down": False, "label": "Online", "message": ""}
+
+
 def snapshot(
     *,
     statics: list[dict],
@@ -138,7 +151,8 @@ def snapshot(
     rows = lobby_rows(statics, board, public_ip)
     updated = str((board or {}).get("updated") or "").strip()
     href = pages_href(pages_url)
-    fields = []
+    health = box_status(board)
+    fields = [{"name": "Box", "value": ("🔴 " if health["down"] else "🟢 ") + health["label"], "inline": False}]
     for row in rows:
         value = row["status"]
         if row["busy"] and row["names"] and row["status"] != row["names"]:
@@ -158,12 +172,18 @@ def snapshot(
     buttons = [{"label": row["label"], "url": row["join"]} for row in rows]
     if href:
         buttons.append({"label": "Player page", "url": href})
-    description = (
-        "Same join links as the player page. Approved Steam IDs only. "
-        "After join: **Download missing content**.\n"
-        "empty = nobody in the lobby. A name / N online = someone’s already in.\n"
-        "Track zips are in the Tracks field (or on the player page)."
-    )
+    if health["down"]:
+        description = (
+            f"**{health['label']}.** {health['message']}\n"
+            "Join links will work again when the box is back."
+        )
+    else:
+        description = (
+            "Same join links as the player page. Approved Steam IDs only. "
+            "After join: **Download missing content**.\n"
+            "empty = nobody in the lobby. A name / N online = someone’s already in.\n"
+            "Track zips are in the Tracks field (or on the player page)."
+        )
     if href:
         description += f"\n{href}"
     stamp = updated.replace("T", " ").replace("+00:00", " UTC") if updated else "waiting for first lap / join"

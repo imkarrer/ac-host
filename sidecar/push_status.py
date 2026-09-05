@@ -127,6 +127,59 @@ class StatusPusher:
             resp.read()
         self._last_hash = digest
         print(f"status pushed {self.path}")
+        self._notify_event(str(updated))
+
+
+    def _notify_event(self, updated: str) -> None:
+        """Outbound ping so the GitHub Pages tab can refresh without a home-box port."""
+        post_status_event(updated or "updated")
+
+
+def post_status_event(message: str) -> None:
+    """POST to ntfy. Works without a GitHub token so heartbeats still fire."""
+    url = event_url()
+    if not url:
+        return
+    req = Request(
+        url,
+        data=(message or "updated").encode("utf-8"),
+        headers={
+            "User-Agent": HTTP_HEADERS["User-Agent"],
+            "Content-Type": "text/plain",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(req, timeout=10) as resp:
+            resp.read()
+        print(f"status event posted {url}")
+    except Exception as exc:
+        print(f"status event failed: {exc}")
+
+
+def notify_heartbeat() -> None:
+    post_status_event("heartbeat")
+
+
+def event_url() -> str:
+    explicit = os.environ.get("STATUS_EVENT_URL", "").strip()
+    if explicit:
+        return explicit
+    repo = os.environ.get("GITHUB_STATUS_REPO", "").strip()
+    owner, _, name = repo.partition("/")
+    if not owner or not name:
+        return ""
+    return f"https://ntfy.sh/ac-{owner}-{name}-status"
+
+
+def event_sse_url() -> str:
+    explicit = os.environ.get("STATUS_EVENT_SSE", "").strip()
+    if explicit:
+        return explicit
+    base = event_url().rstrip("/")
+    if not base:
+        return ""
+    return base if base.endswith("/sse") else f"{base}/sse"
 
 
 _pusher: StatusPusher | None = None

@@ -9,6 +9,7 @@ import select
 import socket
 import struct
 import sys
+import time
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,8 @@ for _candidate in (_HERE, _HERE.parent / "shared"):
     if (_candidate / "downtime.py").is_file() and str(_candidate) not in sys.path:
         sys.path.insert(0, str(_candidate))
         break
+
+HEARTBEAT_SEC = float(os.environ.get("STATUS_HEARTBEAT_SEC", "60"))
 
 # Must match scripts/render_cfg.py and scripts/acctl.py
 GAME_PORT_START = 9600
@@ -330,7 +333,46 @@ def resolve_plugin_slots(state: Path, catalog: Path) -> list[int]:
         if slot is not None and slot >= 0:
             slots.add(slot)
 
+    for meta_path in sorted(state.glob("series/*/rounds/*/quali/meta.json")):
+        meta = load_json(meta_path, {})
+        if meta.get("slot") is not None:
+            slots.add(int(meta["slot"]))
+    for cfg in sorted(state.glob("series/*/rounds/*/*/cfg")):
+        slot = slot_from_cfg(cfg)
+        if slot is not None and slot >= 0:
+            slots.add(slot)
+
     return sorted(slots)
+
+
+def series_quali_meta(state: Path, slot: int) -> dict | None:
+    for meta_path in state.glob("series/*/rounds/*/quali/meta.json"):
+        meta = load_json(meta_path, {})
+        if int(meta.get("slot") or -1) == slot:
+            return meta
+    return None
+
+
+def sync_series_quali_lap(
+    state: Path,
+    series_id: str,
+    round_id: str,
+    *,
+    steam_id: str,
+    lap_ms: int,
+) -> None:
+    shared = Path(__file__).resolve().parents[1] / "shared"
+    if str(shared) not in sys.path:
+        sys.path.insert(0, str(shared))
+    import series_lib
+
+    series_lib.record_quali_lap(
+        state,
+        series_id,
+        round_id,
+        steam_id=steam_id,
+        lap_ms=lap_ms,
+    )
 
 
 def empty_lobby(item: dict) -> dict:
@@ -388,12 +430,28 @@ class Leaderboard:
             ordered[item["id"]] = current
         for key, value in existing.items():
             if key not in ordered and isinstance(value, dict):
-                if key.startswith("race-") or key.startswith("slot-"):
+                if key.startswith("race-") or key.startswith("slot-") or key.startswith("series-"):
                     ordered[key] = value
         payload["lobbies"] = ordered
+        try:
+            import server_health
+
+            server_health.apply_to_payload(payload, self.path.parent)
+        except Exception:
+            pass
         return payload
 
+    def _apply_health(self) -> None:
+        try:
+            import server_health
+
+            server_health.apply_to_payload(self.payload, self.path.parent)
+        except Exception:
+            pass
+
     def save(self) -> None:
+        self._apply_health()
+        self.payload["aliveAt"] = utcnow()
         self.payload["updated"] = utcnow()
         for lobby in self.payload["lobbies"].values():
             lobby["allTime"] = sort_entries(list(lobby.get("allTime") or []))
@@ -405,6 +463,27 @@ class Leaderboard:
             from push_status import schedule_push
 
             schedule_push(text)
+        except Exception:
+            pass
+
+    def touch_alive(self) -> None:
+        """Refresh aliveAt (and ntfy) without a GitHub commit unless status flipped."""
+        before = (self.payload.get("status"), self.payload.get("statusMessage"))
+        self._apply_health()
+        self.payload["aliveAt"] = utcnow()
+        after = (self.payload.get("status"), self.payload.get("statusMessage"))
+        text = json.dumps(self.payload, indent=2) + "\n"
+        atomic_write(self.path, text)
+        atomic_write(self.dist, text)
+        try:
+            if before != after:
+                from push_status import schedule_push
+
+                schedule_push(text)
+            else:
+                from push_status import notify_heartbeat
+
+                notify_heartbeat()
         except Exception:
             pass
 
@@ -452,13 +531,24 @@ class Leaderboard:
         return changed
 
 
-def slot_to_lobby_id(slot: int, statics: list[dict], races: dict) -> str:
+def slot_to_lobby_id(slot: int, statics: list[dict], races: dict, *, state: Path | None = None) -> str:
     for item in statics:
         if int(item.get("slot", -1)) == slot:
             return str(item["id"])
     for name, info in races.items():
         if int(info.get("slot", -1)) == slot:
+            if str(info.get("kind") or "") == "series":
+                return f"series-{info.get('series_id')}-{info.get('round_id')}-{info.get('phase')}"
             return f"race-{name}"
+    if state is not None:
+        meta = series_quali_meta(state, slot)
+        if meta:
+            return f"series-{meta['series_id']}-{meta['round_id']}-quali"
+        for phase in ("race", "quali"):
+            for meta_path in state.glob(f"series/*/rounds/*/{phase}/meta.json"):
+                meta = load_json(meta_path, {})
+                if int(meta.get("slot") or -1) == slot:
+                    return f"series-{meta['series_id']}-{meta['round_id']}-{phase}"
     return f"slot-{slot}"
 
 
@@ -495,6 +585,7 @@ class Plugin:
         self.socks: dict[socket.socket, int] = {}
         self.slot_sock: dict[int, socket.socket] = {}
         self._downtime_prev: float | None = None
+        self._last_heartbeat: float = 0.0
         self.board.clear_online()
         self.board.save()
 
@@ -531,6 +622,13 @@ class Plugin:
         for slot in list(self.slot_sock):
             self.send(slot, payload)
         print(f"plugin chat: {text}")
+
+    def tick_heartbeat(self) -> None:
+        now = time.monotonic()
+        if now - self._last_heartbeat < HEARTBEAT_SEC:
+            return
+        self._last_heartbeat = now
+        self.board.touch_alive()
 
     def tick_downtime(self) -> None:
         try:
@@ -589,7 +687,7 @@ class Plugin:
         )
 
     def lobby_id(self, slot: int) -> str:
-        return slot_to_lobby_id(slot, self.statics, self.races)
+        return slot_to_lobby_id(slot, self.statics, self.races, state=self.state)
 
     def handle(self, slot: int, data: bytes) -> None:
         if not data:
@@ -648,6 +746,18 @@ class Plugin:
                 ms=laptime,
                 cuts=cuts,
             )
+            meta = series_quali_meta(self.state, slot)
+            if meta and cuts == 0 and valid_lap(laptime, cuts, driver["guid"]):
+                try:
+                    sync_series_quali_lap(
+                        self.state,
+                        str(meta["series_id"]),
+                        str(meta["round_id"]),
+                        steam_id=driver["guid"],
+                        lap_ms=laptime,
+                    )
+                except Exception as exc:
+                    print(f"plugin series quali sync failed: {exc}")
             print(
                 f"plugin slot {slot} lap {driver['name']} {driver['guid']} "
                 f"{driver['car']} {laptime}ms cuts={cuts} pb={pb}"
@@ -662,6 +772,10 @@ class Plugin:
         while True:
             timeout = self.poll_timeout()
             ready, _, _ = select.select(list(self.socks), [], [], timeout)
+            try:
+                self.tick_heartbeat()
+            except Exception:
+                traceback.print_exc()
             try:
                 self.tick_downtime()
             except Exception:
