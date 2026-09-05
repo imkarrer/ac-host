@@ -50,8 +50,10 @@ class PageMirrorTests(unittest.TestCase):
         self.assertEqual(snap["buttons"][0]["label"], "Blackhawk")
         self.assertIn("httpPort=8081", snap["buttons"][0]["url"])
         self.assertEqual(snap["buttons"][-1], {"label": "Player page", "url": "https://simracing.fugazy.dev/"})
-        self.assertEqual(snap["fields"][0]["value"], "Isaac")
-        self.assertEqual(snap["fields"][1]["value"], "empty")
+        self.assertEqual(snap["fields"][0]["name"], "Box")
+        self.assertIn("Online", snap["fields"][0]["value"])
+        self.assertEqual(snap["fields"][1]["value"], "Isaac")
+        self.assertEqual(snap["fields"][2]["value"], "empty")
         names = [field["name"] for field in snap["fields"]]
         self.assertIn("Tracks", names)
         tracks = next(field for field in snap["fields"] if field["name"] == "Tracks")
@@ -61,6 +63,25 @@ class PageMirrorTests(unittest.TestCase):
         garage = next(field for field in snap["fields"] if field["name"] == "Garage")
         self.assertIn("Abarth 124 Spider", garage["value"])
         self.assertTrue(snap["footer"].startswith(page_mirror.MARKER))
+
+    def test_snapshot_shows_maintenance(self) -> None:
+        board = {
+            "status": "maintenance",
+            "statusMessage": "Wiring the second NIC.",
+            "updated": "2026-09-05T16:00:00+00:00",
+            "lobbies": {"blackhawk": {"online": []}},
+        }
+        snap = page_mirror.snapshot(
+            statics=STATICS,
+            board=board,
+            public_ip="1.2.3.4",
+            pages_url="https://simracing.fugazy.dev",
+            cars=[],
+        )
+        self.assertEqual(snap["title"], "Practice")
+        self.assertIn("Wiring the second NIC.", snap["description"])
+        self.assertEqual(snap["fields"][0]["name"], "Box")
+        self.assertIn("Down", snap["fields"][0]["value"])
 
 
 if __name__ == "__main__":

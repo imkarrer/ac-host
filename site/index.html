@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-events="__AC_STATUS_EVENTS__">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,18 +10,32 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
   <div class="wrap">
     <header>
+      <nav class="site-nav" aria-label="Site">
+        <a class="nav-link on" href="index.html">Practice</a>
+        <a class="nav-link" href="series.html">Series</a>
+        <a class="nav-link ghost" href="__AC_DISCORD_INVITE__">Discord</a>
+        <p class="health" id="health" data-state="checking" role="status" aria-live="polite">
+          <span class="health-dot" aria-hidden="true"></span>
+          <span class="health-label">Checking…</span>
+        </p>
+      </nav>
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"></span>
         <p class="eyebrow">Fugazy Sim Racing</p>
       </div>
       <h1>Practice</h1>
-      <p class="lede">Private Assetto Corsa sessions. Get approved on Discord, then jump a lobby. Green is empty. Amber means someone’s already in.</p>
+      <p class="lede">Private Assetto Corsa sessions. Get approved on Discord, then jump a lobby. The light is the box — green is up, red is down. On a lobby card, green is empty and amber means someone’s already in.</p>
     </header>
+
+    <aside class="health-banner" id="health-banner" hidden>
+      <strong id="health-title">Down for maintenance</strong>
+      <p id="health-message">Practice servers are offline.</p>
+    </aside>
 
     <section class="card discord-step">
       <div class="copy">
@@ -89,7 +103,7 @@
         <ul class="car-pills">
             __AC_CARS_LIST__
         </ul>
-        <p class="hint">We add cars by need. Want another? Post in <a href="__AC_DISCORD_FEATURE_REQUESTS__">#feature-requests</a>.</p>
+        <p class="hint">124, GR86, Civic, and NSX zips are hosted — Join and <strong>Download missing content</strong>, or drop a zip on Content Manager. Miata, Elise, and E30 are in the base game. Want another? Post in <a href="__AC_DISCORD_FEATURE_REQUESTS__">#feature-requests</a>.</p>
       </div>
       <a class="btn ghost" href="__AC_DISCORD_FEATURE_REQUESTS__">Request a car</a>
     </section>
@@ -111,6 +125,6 @@
       <div id="boards"><p class="muted">Loading times…</p></div>
     </section>
   </div>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
