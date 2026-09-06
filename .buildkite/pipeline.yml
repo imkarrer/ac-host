@@ -1,0 +1,80 @@
+# Agent runs on ac-box (compose/docker-compose.buildkite.yml).
+# No SSH: jobs write /var/lib/ac-host and systemd recycles.
+#
+# Plugin: https://github.com/imkarrer/flox-buildkite-plugin
+# SERIES_ID set → race-pack only (triggered by /admin quali-close).
+#
+# Cache is MinIO on the same compose network (http://minio:9000).
+# Public key is non-secret; the signing key stays in compose/.env.buildkite.
+
+agents:
+  queue: self
+
+steps:
+  - label: ":python: Unit tests"
+    key: test
+    if: build.env("SERIES_ID") == null || build.env("SERIES_ID") == ""
+    command: bash scripts/ci_test.sh
+    plugins:
+      - imkarrer/flox#main:
+          <<: &flox
+            s3-cache-bucket: flox-binary-cache
+            s3-cache-endpoint: http://minio:9000
+            s3-cache-region: us-east-1
+            s3-cache-public-key: "flox-binary-cache-1:pSpP6x540XtBh+IMvmW8XrRHJDtIi+b31uvvIA0PyR0="
+            s3-cache-push: true
+          command: bash scripts/ci_test.sh
+
+  - label: ":nix: Lint"
+    key: lint
+    if: build.env("SERIES_ID") == null || build.env("SERIES_ID") == ""
+    command: bash scripts/ci_lint.sh
+    plugins:
+      - imkarrer/flox#main:
+          <<: *flox
+          command: bash scripts/ci_lint.sh
+
+  - wait: ~
+    if: build.env("SERIES_ID") == null || build.env("SERIES_ID") == ""
+
+  - label: ":package: Queue prod (03:00 apply)"
+    key: queue-prod
+    if: build.branch == "main" && (build.env("SERIES_ID") == null || build.env("SERIES_ID") == "")
+    command: python3 scripts/ci_queue_prod.py
+    plugins:
+      - imkarrer/flox#main:
+          <<: *flox
+          command: python3 scripts/ci_queue_prod.py
+
+  - label: ":pages: Publish player page"
+    key: pages
+    if: build.branch == "main" && (build.env("SERIES_ID") == null || build.env("SERIES_ID") == "")
+    command: python3 scripts/ci_publish_pages.py
+    plugins:
+      - imkarrer/flox#main:
+          <<: *flox
+          command: python3 scripts/ci_publish_pages.py
+
+  - block: ":rocket: Apply now (kicks lobbies)"
+    key: apply-now-gate
+    prompt: "Apply the queued tree and recycle practice immediately? Prefer the 03:00 window."
+    branches: main
+    if: build.env("SERIES_ID") == null || build.env("SERIES_ID") == ""
+
+  - label: ":rocket: Apply now"
+    key: apply-now
+    if: build.branch == "main" && (build.env("SERIES_ID") == null || build.env("SERIES_ID") == "")
+    command: python3 scripts/ci_apply_now.py
+    plugins:
+      - imkarrer/flox#main:
+          <<: *flox
+          command: python3 scripts/ci_apply_now.py
+
+  - label: ":checkered_flag: Series race pack"
+    key: series-pack
+    if: build.env("SERIES_ID") != null && build.env("SERIES_ID") != ""
+    command: bash scripts/ci_series_pack.sh
+    plugins:
+      - imkarrer/flox#main:
+          <<: *flox
+          command: bash scripts/ci_series_pack.sh
