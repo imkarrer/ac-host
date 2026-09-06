@@ -41,7 +41,7 @@ def main() -> int:
     )
     print(f"queued {sha} rebuild_sidecars={rebuild} -> {path}")
     print(f"tree {dest}")
-    print("apply happens at 03:00 CT (ac-host-nightly), or acctl apply-now")
+    print("folded into pending-src; 03:00 DOWNTIME=1 applies once")
     return 0
 
 

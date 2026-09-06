@@ -1,9 +1,10 @@
 # CI/CD (Buildkite + Flox)
 
 The Buildkite **agent runs on ac-box**. Jobs write files under
-`/var/lib/ac-host`. They do **not** SSH. The 03:00 CT recycle is still
-systemd (`ac-host-nightly`) — that is what kicks players, after the
-existing Discord / in-game countdown.
+`/var/lib/ac-host`. They do **not** SSH. Green `main` only **queues** a
+tree. One scheduled build (`DOWNTIME=1` at 03:00 America/Chicago) applies
+that tree and recycles practice. Last `queue-prod` wins — do not unblock
+old Apply-now steps.
 
 Race night (start/stop quali and race) stays on the Discord bot +
 `acctl`. Buildkite only bakes the numbered-livery zip after
@@ -15,10 +16,10 @@ Race night (start/stop quali and race) stays on the Discord bot +
 | --- | --- | --- | --- |
 | **Unit tests** | every push (not pack builds) | `.buildkite/pipeline.yml` → `scripts/ci_test.sh` inside Flox | no |
 | **Lint** | every push (not pack builds) | `scripts/ci_lint.sh` (`compileall` + `nixfmt --check flake.nix`) | no |
-| **Queue prod** | green `main` | `scripts/ci_queue_prod.py` rsyncs the checkout to `/var/lib/ac-host/pending-src` and writes `pending-deploy.json` | no |
-| **Nightly apply** | 03:00 CT, systemd | `ac-host-nightly`: `acctl apply-pending` then `recycle-static`. Rebuilds sidecar/bot only if the queue marked `rebuild_sidecars` | yes — same recycle as today |
+| **Queue prod** | green `main` | `scripts/ci_queue_prod.py` overwrites `/var/lib/ac-host/pending-src` (fold) | no |
+| **Downtime** | 03:00 CT schedule, `DOWNTIME=1` | `scripts/ci_downtime.py`: apply pending, then one `recycle-static`. Same calendar day will not recycle twice | yes |
 | **Publish pages** | green `main` | `scripts/ci_publish_pages.py` renders `site/` and copies allowed files into `AC_PAGES_CHECKOUT`. Never touches `leaderboard.json` | no |
-| **Apply now** | manual `block` on `main` | `scripts/ci_apply_now.py` writes `apply-now.json`; `ac-host-apply-now.path` runs `acctl apply-now` (drain + resume) | yes |
+| **Emergency apply** | New Build with `EMERGENCY=1` | `scripts/ci_apply_now.py` writes `apply-now.json` (drain + resume) | yes |
 | **Series race pack** | `/admin quali-close` sets `SERIES_ID` | `scripts/ci_series_pack.sh` → `generate_series_liveries.py` + `publish_series_race_pack.py`. If Buildkite is unset, the bot bakes in-process (old path) | no |
 
 Not jobs (on purpose):
@@ -32,16 +33,26 @@ Not jobs (on purpose):
 ## Why no SSH
 
 The agent compose file mounts `/var/lib/ac-host`. Queue and pages are
-file copies. Emergency apply is a flag file that systemd already on the
-box honors. Nightly apply is the timer that already existed.
+file copies. Emergency apply is a flag file. Downtime apply + recycle
+runs inside the scheduled job (docker.sock + the same `acctl` the timer
+used).
 
 ```text
-Buildkite job (container on ac-box)
-    → /var/lib/ac-host/pending-src + pending-deploy.json
-systemd 03:00
-    → rsync pending-src → /var/lib/ac-host/src
-    → recycle-static
+green main → pending-src (overwrites; last SHA wins)
+03:00 DOWNTIME=1 → apply pending-src → src → recycle-static once
 ```
+
+Create the schedule on the pipeline: **Pipeline Settings → Schedules → New**.
+
+- Cron: `0 3 * * * America/Chicago`
+- Branch: `main`
+- Env: `DOWNTIME=1`
+- Queue: `self`
+
+Buildkite may start that job a few minutes after 03:00. Disable
+`ac-host-nightly.timer` on the box so systemd does not recycle a second
+time the same morning. Cancel any builds still sitting on the old
+Apply-now block — do not Unblock all of them.
 
 ## First time
 
@@ -69,8 +80,8 @@ systemd 03:00
    in `/var/lib/ac-host/.env` and rebuild the bot.
 5. Optional pages push: clone `ac-practice` to `$AC_PAGES_CHECKOUT` and
    set `AC_PAGES_PUSH=1`.
-6. `nixos-rebuild switch` so nightly runs `apply-pending` and the
-   apply-now path unit exists.
+6. Add the 03:00 `DOWNTIME=1` schedule (above). Then
+   `systemctl disable --now ac-host-nightly.timer` so only one recycle.
 7. Push `.flox/`, `.buildkite/`, and the `ci_*` scripts to `main`.
 
 ## Local check

@@ -1,6 +1,7 @@
 # Buildkite agent on ac-box. Ubuntu+Flox image from the plugin Dockerfile,
-# plus a loopback-only MinIO Nix binary cache. Jobs write /var/lib/ac-host;
-# systemd recycles. No SSH. Do not publish 9000/9001 off localhost.
+# plus a loopback-only MinIO Nix binary cache. Jobs write /var/lib/ac-host
+# and recycle via the host Docker socket. No SSH. Do not publish 9000/9001
+# off localhost.
 #
 #   cp compose/env.buildkite.example compose/.env.buildkite
 #   # paste token + cache secrets (see docs/ci-cd.md)
@@ -75,6 +76,7 @@ services:
       S3_CACHE_SIGNING_KEY: ${S3_CACHE_SIGNING_KEY:?set S3_CACHE_SIGNING_KEY}
     volumes:
       - /var/lib/ac-host:/var/lib/ac-host
+      - /var/run/docker.sock:/var/run/docker.sock
       - buildkite-builds:/buildkite/builds
       - buildkite-nix:/nix
 
