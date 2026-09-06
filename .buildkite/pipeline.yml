@@ -58,8 +58,7 @@ steps:
   - block: ":rocket: Apply now (kicks lobbies)"
     key: apply-now-gate
     prompt: "Apply the queued tree and recycle practice immediately? Prefer the 03:00 window."
-    branches: main
-    if: build.env("SERIES_ID") == null || build.env("SERIES_ID") == ""
+    if: build.branch == "main" && (build.env("SERIES_ID") == null || build.env("SERIES_ID") == "")
 
   - label: ":rocket: Apply now"
     key: apply-now
