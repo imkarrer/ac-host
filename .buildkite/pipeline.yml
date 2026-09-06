@@ -6,6 +6,7 @@
 #
 # Cache is MinIO on the same compose network (http://minio:9000).
 # Public key is non-secret; the signing key stays in compose/.env.buildkite.
+# cache-probe: 2026-09-05 (noop comment to time a cached Flox activate)
 
 agents:
   queue: self
