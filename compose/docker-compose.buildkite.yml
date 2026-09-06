@@ -1,0 +1,84 @@
+# Buildkite agent on ac-box. Ubuntu+Flox image from the plugin Dockerfile,
+# plus a loopback-only MinIO Nix binary cache. Jobs write /var/lib/ac-host;
+# systemd recycles. No SSH. Do not publish 9000/9001 off localhost.
+#
+#   cp compose/env.buildkite.example compose/.env.buildkite
+#   # paste token + cache secrets (see docs/ci-cd.md)
+#   docker compose -f compose/docker-compose.buildkite.yml --env-file compose/.env.buildkite up -d --build
+#
+# First image build is heavy (flox + SEED_PACKAGES). Keep it off race night.
+
+name: ac-host-ci
+
+services:
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_started
+    restart: "no"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_CACHE_BUCKET: ${S3_CACHE_BUCKET:-flox-binary-cache}
+      S3_CACHE_ACCESS_KEY_ID: ${S3_CACHE_ACCESS_KEY_ID:?set S3_CACHE_ACCESS_KEY_ID}
+      S3_CACHE_SECRET_ACCESS_KEY: ${S3_CACHE_SECRET_ACCESS_KEY:?set S3_CACHE_SECRET_ACCESS_KEY}
+    volumes:
+      - ./minio-init.sh:/minio-init.sh:ro
+    entrypoint: ["/bin/sh", "/minio-init.sh"]
+
+  agent:
+    build:
+      context: "${FLOX_PLUGIN_CONTEXT:-https://github.com/imkarrer/flox-buildkite-plugin.git#main}"
+      dockerfile: Dockerfile
+      args:
+        FLOX_VERSION: ${FLOX_VERSION:-1.14.0}
+        S3_CACHE_BUCKET: ${S3_CACHE_BUCKET:-flox-binary-cache}
+        S3_CACHE_ENDPOINT: http://minio:9000
+        S3_CACHE_REGION: us-east-1
+        S3_CACHE_PUBLIC_KEY: "flox-binary-cache-1:pSpP6x540XtBh+IMvmW8XrRHJDtIi+b31uvvIA0PyR0="
+        # Same pkg-paths the ac-host Flox env uses (no unused gh).
+        SEED_PACKAGES: ${SEED_PACKAGES:-python312Full git rsync nixfmt-rfc-style python312Packages.numpy python312Packages.pillow python312Packages.scipy}
+    image: ac-host-buildkite-agent:flox
+    restart: unless-stopped
+    user: "0:0"
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      BUILDKITE_AGENT_TOKEN: ${BUILDKITE_AGENT_TOKEN:?set BUILDKITE_AGENT_TOKEN}
+      BUILDKITE_AGENT_TAGS: ${BUILDKITE_AGENT_TAGS:-queue=self}
+      BUILDKITE_AGENT_NAME: ${BUILDKITE_AGENT_NAME:-ac-box}
+      AC_STATE: /var/lib/ac-host
+      AC_CONTENT: /var/lib/ac-host/content
+      AC_SRC: /var/lib/ac-host/src
+      AC_BUILD: /var/lib/ac-host/build
+      AC_SERVE_CONTENT: /var/lib/ac-host/content
+      AC_PAGES_CHECKOUT: ${AC_PAGES_CHECKOUT:-}
+      AC_PAGES_PUSH: ${AC_PAGES_PUSH:-0}
+      AWS_ACCESS_KEY_ID: ${S3_CACHE_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${S3_CACHE_SECRET_ACCESS_KEY}
+      AWS_EC2_METADATA_DISABLED: "true"
+      S3_CACHE_SIGNING_KEY: ${S3_CACHE_SIGNING_KEY:?set S3_CACHE_SIGNING_KEY}
+    volumes:
+      - /var/lib/ac-host:/var/lib/ac-host
+      - buildkite-builds:/buildkite/builds
+      - buildkite-nix:/nix
+
+volumes:
+  buildkite-builds:
+  buildkite-nix:
+  minio-data:
