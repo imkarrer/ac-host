@@ -110,15 +110,17 @@ Buildkite pipeline on the same agent.
 
 ## Nix binary cache (MinIO)
 
-The plugin image and every pipeline step point at bucket `flox-binary-cache`
-on `http://minio:9000` (same compose network). After a step, `s3-cache-push:
-true` signs the activated closure and writes it back so the next job can
-substitute instead of fetching upstream.
+The plugin image, the resident agent env, and each pipeline's top-level
+`env:` point at bucket `flox-binary-cache` on `http://minio:9000` (same
+compose network). After a step, `S3_CACHE_PUSH=true` signs the activated
+closure and writes it back so the next job can substitute instead of
+fetching upstream. Steps only set `command` — they do not repeat
+`s3-cache-*` keys.
 
 | Piece | Where | Secret? |
 | --- | --- | --- |
-| Bucket / endpoint / region | `.buildkite/*.yml` + image bake args | no |
-| Public key | `.buildkite/flox-binary-cache.pub` (also inlined in the pipeline) | no |
+| Bucket / endpoint / region / public key / push | pipeline `env:` + agent env + image bake args | no |
+| Public key file | `.buildkite/flox-binary-cache.pub` | no |
 | MinIO root + cache user | `compose/.env.buildkite` | yes |
 | Nix signing key | `S3_CACHE_SIGNING_KEY` in that env file | **yes** — anyone with it can plant trusted store paths |
 
@@ -127,7 +129,7 @@ Generate or rotate the signing keypair (updates the committed public file):
 ```bash
 bash scripts/ci_nix_cache_key.sh
 # copy the secret line into compose/.env.buildkite
-# update the public key string in .buildkite/pipeline.yml to match
+# update S3_CACHE_PUBLIC_KEY in .buildkite/*.yml and the agent compose to match
 ```
 
 A workstation copy of `compose/.env.buildkite` may already have generated

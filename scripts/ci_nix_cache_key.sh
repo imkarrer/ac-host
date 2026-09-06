@@ -6,7 +6,7 @@
 #
 # Put the secret file's single line into compose/.env.buildkite as
 # S3_CACHE_SIGNING_KEY=...  Commit only the public half
-# (.buildkite/flox-binary-cache.pub) and update pipeline.yml to match.
+# (.buildkite/flox-binary-cache.pub) and update S3_CACHE_PUBLIC_KEY to match.
 set -euo pipefail
 
 out="${1:-secrets/flox-binary-cache.secret}"

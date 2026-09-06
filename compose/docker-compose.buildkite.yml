@@ -73,6 +73,13 @@ services:
       AWS_ACCESS_KEY_ID: ${S3_CACHE_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${S3_CACHE_SECRET_ACCESS_KEY}
       AWS_EC2_METADATA_DISABLED: "true"
+      # Non-secret cache identity. The plugin reads these so pipelines
+      # do not repeat s3-cache-* on every step.
+      S3_CACHE_BUCKET: ${S3_CACHE_BUCKET:-flox-binary-cache}
+      S3_CACHE_ENDPOINT: ${S3_CACHE_ENDPOINT:-http://minio:9000}
+      S3_CACHE_REGION: ${S3_CACHE_REGION:-us-east-1}
+      S3_CACHE_PUBLIC_KEY: ${S3_CACHE_PUBLIC_KEY:-flox-binary-cache-1:pSpP6x540XtBh+IMvmW8XrRHJDtIi+b31uvvIA0PyR0=}
+      S3_CACHE_PUSH: ${S3_CACHE_PUSH:-true}
       S3_CACHE_SIGNING_KEY: ${S3_CACHE_SIGNING_KEY:?set S3_CACHE_SIGNING_KEY}
     volumes:
       - /var/lib/ac-host:/var/lib/ac-host

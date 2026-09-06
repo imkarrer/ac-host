@@ -6,14 +6,12 @@
 agents:
   queue: self
 
-# YAML anchor only — Buildkite ignores this key. Steps merge it with <<: *flox
-# and override command. https://buildkite.com/docs/pipelines/configure/yaml
-flox_plugin: &flox
-  s3-cache-bucket: flox-binary-cache
-  s3-cache-endpoint: http://minio:9000
-  s3-cache-region: us-east-1
-  s3-cache-public-key: "flox-binary-cache-1:pSpP6x540XtBh+IMvmW8XrRHJDtIi+b31uvvIA0PyR0="
-  s3-cache-push: true
+env:
+  S3_CACHE_BUCKET: flox-binary-cache
+  S3_CACHE_ENDPOINT: http://minio:9000
+  S3_CACHE_REGION: us-east-1
+  S3_CACHE_PUBLIC_KEY: "flox-binary-cache-1:pSpP6x540XtBh+IMvmW8XrRHJDtIi+b31uvvIA0PyR0="
+  S3_CACHE_PUSH: "true"
 
 steps:
   - label: ":python: Unit tests"
@@ -21,7 +19,6 @@ steps:
     command: bash scripts/ci_test.sh
     plugins:
       - imkarrer/flox#main:
-          <<: *flox
           command: bash scripts/ci_test.sh
 
   - label: ":nix: Lint"
@@ -29,7 +26,6 @@ steps:
     command: bash scripts/ci_lint.sh
     plugins:
       - imkarrer/flox#main:
-          <<: *flox
           command: bash scripts/ci_lint.sh
 
   - wait: ~
@@ -40,7 +36,6 @@ steps:
     command: python3 scripts/ci_queue_prod.py
     plugins:
       - imkarrer/flox#main:
-          <<: *flox
           command: python3 scripts/ci_queue_prod.py
 
   - label: ":pages: Publish player page"
@@ -49,5 +44,4 @@ steps:
     command: python3 scripts/ci_publish_pages.py
     plugins:
       - imkarrer/flox#main:
-          <<: *flox
           command: python3 scripts/ci_publish_pages.py
