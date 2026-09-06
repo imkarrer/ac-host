@@ -90,6 +90,7 @@ services:
       GITHUB_STATUS_REPO: ${GITHUB_STATUS_REPO:-}
       GITHUB_STATUS_BRANCH: ${GITHUB_STATUS_BRANCH:-main}
       GITHUB_STATUS_PATH: ${GITHUB_STATUS_PATH:-leaderboard.json}
+      STATUS_EVENT_URL: ${STATUS_EVENT_URL:-}
     volumes:
       - ${AC_STATE:?set AC_STATE}:/data
       - ../catalog:/catalog:ro
@@ -116,13 +117,32 @@ services:
       AC_GITHUB_OWNER: ${AC_GITHUB_OWNER:-imkarrer}
       AC_GITHUB_REPO: ${AC_GITHUB_REPO:-ac-practice}
       AC_CATALOG_STATICS: ${AC_CATALOG_STATICS:-statics.json}
+      AC_STATE: /data
       WHITELIST_PATH: /data/whitelist.json
       STEAM_REQUESTS_PATH: /data/steam_requests.json
       AC_CONTENT: /content
       AC_CATALOG: /catalog
+      # Numbered liveries are built from the FULL car folders here, not from the
+      # slim /content the game servers read (that one has no .kn5 models).
+      AC_BUILD: /build
+      AC_REPO: /repo
+      AC_SERVE_CONTENT: /serve
+      AC_GITHUB_TOKEN_FILE: /data/secrets/github-token
+      BUILDKITE_API_TOKEN: ${BUILDKITE_API_TOKEN:-}
+      BUILDKITE_ORG: ${BUILDKITE_ORG:-}
+      BUILDKITE_PIPELINE: ${BUILDKITE_PIPELINE:-ac-host}
+      BUILDKITE_PIPELINE_OPS: ${BUILDKITE_PIPELINE_OPS:-ac-host-ops}
+      BUILDKITE_PIPELINE_SERIES: ${BUILDKITE_PIPELINE_SERIES:-ac-host-series}
     volumes:
       - ${AC_STATE}:/data
       - ${AC_CONTENT}:/content:ro
+      # Same tree as /content, writable, so the pack can drop the generated skin
+      # folders where entry_list.ini and the CM details API expect them.
+      - ${AC_CONTENT}:/serve
+      - ${AC_BUILD:-/var/lib/ac-host/build}:/build
+      # The pack scripts live in the repo rather than the image so a code change
+      # does not need a rebuild of a 400 MB numpy/scipy image.
+      - ..:/repo:ro
       - ../catalog:/catalog:ro
 
 volumes:

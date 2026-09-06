@@ -1,0 +1,42 @@
+# Ops only. Bot / New Build — no GitHub webhook.
+#   DOWNTIME=1   → apply folded pending-src + one recycle
+#   EMERGENCY=1  → apply-now (drain + resume)
+#
+# Upload with: buildkite-agent pipeline upload .buildkite/ops.yml
+# Last queue-prod wins; downtime recycles once. Do not unblock old Apply-now.
+
+agents:
+  queue: self
+
+flox_plugin: &flox
+  s3-cache-bucket: flox-binary-cache
+  s3-cache-endpoint: http://minio:9000
+  s3-cache-region: us-east-1
+  s3-cache-public-key: "flox-binary-cache-1:pSpP6x540XtBh+IMvmW8XrRHJDtIi+b31uvvIA0PyR0="
+  s3-cache-push: true
+
+steps:
+  - label: ":warning: Set DOWNTIME=1 or EMERGENCY=1"
+    key: mode-required
+    if: build.env("DOWNTIME") != "1" && build.env("EMERGENCY") != "1"
+    command: |
+      echo "ac-host-ops needs DOWNTIME=1 (countdown recycle) or EMERGENCY=1 (apply now)"
+      exit 1
+
+  - label: ":moon: Downtime apply + recycle"
+    key: downtime
+    if: build.env("DOWNTIME") == "1"
+    command: python3 scripts/ci_downtime.py
+    plugins:
+      - imkarrer/flox#main:
+          <<: *flox
+          command: python3 scripts/ci_downtime.py
+
+  - label: ":rocket: Emergency apply now"
+    key: emergency
+    if: build.env("EMERGENCY") == "1"
+    command: python3 scripts/ci_apply_now.py
+    plugins:
+      - imkarrer/flox#main:
+          <<: *flox
+          command: python3 scripts/ci_apply_now.py

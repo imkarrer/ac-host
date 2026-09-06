@@ -2,24 +2,32 @@
 
 The Buildkite **agent runs on ac-box**. Jobs write files under
 `/var/lib/ac-host`. They do **not** SSH. Green `main` only **queues** a
-tree. The Discord countdown at mark 0 queues `DOWNTIME=1`, which applies
-that tree and recycles practice. Last `queue-prod` wins — no manual gate.
+tree. The Discord countdown at mark 0 queues **`ac-host-ops`** with
+`DOWNTIME=1`, which applies that tree and recycles practice. Last
+`queue-prod` wins — no manual gate.
+
+Three Buildkite pipelines, one YAML each. A GitHub push cannot recycle.
+
+| Pipeline | YAML | Who starts it |
+| --- | --- | --- |
+| **`ac-host`** | `.buildkite/pipeline.yml` | GitHub push/PR |
+| **`ac-host-ops`** | `.buildkite/ops.yml` | Bot countdown or New Build (`DOWNTIME=1` / `EMERGENCY=1`). No GitHub webhook |
+| **`ac-host-series`** | `.buildkite/series.yml` | `/admin quali-close`. No GitHub webhook |
 
 Race night (start/stop quali and race) stays on the Discord bot +
-`acctl`. Buildkite only bakes the numbered-livery zip after
-`/admin quali-close`.
+`acctl`. Buildkite only bakes the numbered-livery zip after quali-close.
 
 ## Jobs
 
-| Job | When | Implementation | Kicks? |
-| --- | --- | --- | --- |
-| **Unit tests** | every push (not pack builds) | `.buildkite/pipeline.yml` → `scripts/ci_test.sh` inside Flox | no |
-| **Lint** | every push (not pack builds) | `scripts/ci_lint.sh` (`compileall` + `nixfmt --check flake.nix`) | no |
-| **Queue prod** | green `main` | `scripts/ci_queue_prod.py` overwrites `/var/lib/ac-host/pending-src` (fold) | no |
-| **Downtime** | bot countdown mark 0, `DOWNTIME=1` | `scripts/ci_downtime.py`: apply pending, then one `recycle-static`. Same calendar day will not recycle twice. `/downtime-drill` does not queue this | yes |
-| **Publish pages** | green `main` | `scripts/ci_publish_pages.py` renders `site/` and copies allowed files into `AC_PAGES_CHECKOUT`. Never touches `leaderboard.json` | no |
-| **Emergency apply** | New Build with `EMERGENCY=1` | `scripts/ci_apply_now.py` writes `apply-now.json` (drain + resume) | yes |
-| **Series race pack** | `/admin quali-close` sets `SERIES_ID` | `scripts/ci_series_pack.sh` → `generate_series_liveries.py` + `publish_series_race_pack.py`. If Buildkite is unset, the bot bakes in-process (old path) | no |
+| Job | Pipeline | When | Implementation | Kicks? |
+| --- | --- | --- | --- | --- |
+| **Unit tests** | `ac-host` | every push | `scripts/ci_test.sh` inside Flox | no |
+| **Lint** | `ac-host` | every push | `scripts/ci_lint.sh` (`compileall` + `nixfmt --check flake.nix`) | no |
+| **Queue prod** | `ac-host` | green `main` | `scripts/ci_queue_prod.py` overwrites `/var/lib/ac-host/pending-src` (fold) | no |
+| **Publish pages** | `ac-host` | green `main` | `scripts/ci_publish_pages.py` renders `site/` and copies allowed files into `AC_PAGES_CHECKOUT`. Never touches `leaderboard.json` | no |
+| **Downtime** | `ac-host-ops` | bot countdown mark 0, `DOWNTIME=1` | `scripts/ci_downtime.py`: apply pending, then one `recycle-static`. Same calendar day will not recycle twice. `/downtime-drill` does not queue this | yes |
+| **Emergency apply** | `ac-host-ops` | New Build with `EMERGENCY=1` | `scripts/ci_apply_now.py` writes `apply-now.json` (drain + resume) | yes |
+| **Series race pack** | `ac-host-series` | `/admin quali-close` sets `SERIES_ID` | `scripts/ci_series_pack.sh` → `generate_series_liveries.py` + `publish_series_race_pack.py`. If Buildkite is unset, the bot bakes in-process (old path) | no |
 
 Not jobs (on purpose):
 
@@ -51,8 +59,17 @@ the old Apply-now block; do not Unblock them.
 1. Sign up at [buildkite.com](https://buildkite.com) with GitHub (`imkarrer`).
    Org slug is **`isaac-karrer`**. Pipelines live at
    [buildkite.com/isaac-karrer](https://buildkite.com/isaac-karrer).
-2. **New pipeline** → GitHub repo `imkarrer/ac-host` → cluster **Default
-   cluster** → queue **`self`** → keep `buildkite-agent pipeline upload`.
+2. **Three pipelines**, same GitHub repo `imkarrer/ac-host`, cluster
+   **Default cluster**, queue **`self`**:
+
+   | Slug | First step | GitHub builds |
+   | --- | --- | --- |
+   | `ac-host` | `buildkite-agent pipeline upload` | on (push + PR) |
+   | `ac-host-ops` | `buildkite-agent pipeline upload .buildkite/ops.yml` | **off** |
+   | `ac-host-series` | `buildkite-agent pipeline upload .buildkite/series.yml` | **off** |
+
+   Existing `ac-host` stays the CI pipeline. Ops and series must not use
+   the default upload path or a push will run the wrong file.
 3. On **ac-box**, start the Flox agent image **and** the loopback MinIO cache:
 
    ```bash
@@ -67,13 +84,15 @@ the old Apply-now block; do not Unblock them.
    `127.0.0.1:9000` (S3) and `127.0.0.1:9001` (console) only — do not
    publish those ports on the game NIC or WAN.
 
-4. Optional, so `/admin quali-close` queues the pack: set
-   `BUILDKITE_API_TOKEN`, `BUILDKITE_ORG=isaac-karrer`, `BUILDKITE_PIPELINE=ac-host`
-   in `/var/lib/ac-host/.env` and rebuild the bot.
+4. Optional, so the bot can queue ops/series: set
+   `BUILDKITE_API_TOKEN`, `BUILDKITE_ORG=isaac-karrer`,
+   `BUILDKITE_PIPELINE=ac-host`, `BUILDKITE_PIPELINE_OPS=ac-host-ops`,
+   `BUILDKITE_PIPELINE_SERIES=ac-host-series` in `/var/lib/ac-host/.env`
+   and rebuild the bot.
 5. Optional pages push: clone `ac-practice` to `$AC_PAGES_CHECKOUT` and
    set `AC_PAGES_PUSH=1`.
-6. Rebuild the bot so mark 0 can POST `DOWNTIME=1`. Then
-   `systemctl disable --now ac-host-nightly.timer` so only one recycle.
+6. Rebuild the bot so mark 0 can POST `ac-host-ops` with `DOWNTIME=1`.
+   Then `systemctl disable --now ac-host-nightly.timer` so only one recycle.
 7. Push `.flox/`, `.buildkite/`, and the `ci_*` scripts to `main`.
 
 ## Local check
@@ -98,7 +117,7 @@ substitute instead of fetching upstream.
 
 | Piece | Where | Secret? |
 | --- | --- | --- |
-| Bucket / endpoint / region | `.buildkite/pipeline.yml` + image bake args | no |
+| Bucket / endpoint / region | `.buildkite/*.yml` + image bake args | no |
 | Public key | `.buildkite/flox-binary-cache.pub` (also inlined in the pipeline) | no |
 | MinIO root + cache user | `compose/.env.buildkite` | yes |
 | Nix signing key | `S3_CACHE_SIGNING_KEY` in that env file | **yes** — anyone with it can plant trusted store paths |

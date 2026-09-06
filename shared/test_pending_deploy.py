@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -63,6 +64,22 @@ class BuildkiteTriggerTests(unittest.TestCase):
         self.assertTrue(
             buildkite_trigger.configured(token="bkua_x", org="imkarrer", pipeline="ac-host")
         )
+
+    def test_pipeline_slugs(self) -> None:
+        saved = {
+            key: os.environ.pop(key, None)
+            for key in ("BUILDKITE_PIPELINE", "BUILDKITE_PIPELINE_OPS", "BUILDKITE_PIPELINE_SERIES")
+        }
+        try:
+            self.assertEqual(buildkite_trigger.pipeline_slug("ci"), "ac-host")
+            self.assertEqual(buildkite_trigger.pipeline_slug("ops"), "ac-host-ops")
+            self.assertEqual(buildkite_trigger.pipeline_slug("series"), "ac-host-series")
+        finally:
+            for key, value in saved.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
 
 if __name__ == "__main__":
