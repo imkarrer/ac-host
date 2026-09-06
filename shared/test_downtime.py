@@ -37,6 +37,11 @@ class ScheduleTests(unittest.TestCase):
             self.assertIsNone(downtime.next_restart(now))
             self.assertEqual(downtime.practice_time_minutes(now), 1440)
 
+    def test_pipeline_only_on_real_zero(self) -> None:
+        self.assertTrue(downtime.should_trigger_pipeline(0, drill=False))
+        self.assertFalse(downtime.should_trigger_pipeline(0, drill=True))
+        self.assertFalse(downtime.should_trigger_pipeline(5, drill=False))
+
     def test_crossed_marks_countdown(self) -> None:
         self.assertEqual(downtime.crossed_marks(None, 601), [])
         self.assertEqual(downtime.crossed_marks(601, 599), [600])

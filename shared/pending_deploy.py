@@ -1,8 +1,8 @@
 """Queue a prod tree for the 03:00 recycle. No SSH — files live on ac-box.
 
 Buildkite (agent on the box) writes ``pending-deploy.json`` + ``pending-src/``.
-The 03:00 ``DOWNTIME=1`` job applies that tree into ``/var/lib/ac-host/src``
-and then runs ``recycle-static``. Players already get the Discord countdown.
+The bot's 03:00 countdown queues ``DOWNTIME=1``, which applies that tree
+into ``/var/lib/ac-host/src`` and then runs ``recycle-static``.
 """
 
 from __future__ import annotations

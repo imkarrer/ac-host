@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import secrets
@@ -26,6 +27,10 @@ from steam_parse import parse_profile, steam64_from_xml, vanity_slug
 import car_skins
 import page_mirror
 import downtime
+try:
+    import buildkite_trigger
+except ImportError:
+    buildkite_trigger = None  # type: ignore[assignment]
 from players import (
     NOT_BOT_REGISTERED,
     clear_livery,
@@ -572,6 +577,7 @@ class LobbyBot(commands.Bot):
         self._downtime_prev: float | None = None
         self._countdown_msg: discord.Message | None = None
         self._drill_at: datetime | None = None
+        self._downtime_pipeline_date: str | None = None
 
     async def setup_hook(self) -> None:
         self.add_view(PersistentReviewView())
@@ -672,7 +678,32 @@ def downtime_remaining() -> float | None:
     return downtime.seconds_until_restart()
 
 
+def _queue_downtime_pipeline() -> None:
+    """Real 03:00 only. Drill and a second hit the same Chicago day are no-ops."""
+    if bot._drill_at is not None:
+        return
+    today = downtime.now_local().date().isoformat()
+    if bot._downtime_pipeline_date == today:
+        print(f"downtime pipeline already queued {today}")
+        return
+    if buildkite_trigger is None or not buildkite_trigger.configured():
+        print("downtime pipeline skipped: Buildkite not configured")
+        return
+    try:
+        build = buildkite_trigger.trigger_downtime()
+    except Exception as exc:
+        print(f"downtime pipeline trigger failed: {exc}")
+        return
+    if not build:
+        print("downtime pipeline skipped: Buildkite not configured")
+        return
+    bot._downtime_pipeline_date = today
+    print(f"downtime pipeline {build.get('web_url') or 'queued'}")
+
+
 async def fire_downtime_mark(mark: int) -> None:
+    if downtime.should_trigger_pipeline(mark, drill=bot._drill_at is not None):
+        await asyncio.get_event_loop().run_in_executor(None, _queue_downtime_pipeline)
     channel = await status_text_channel()
     if channel is None:
         print(f"downtime mark {mark} skipped (no #server-status)")
@@ -729,7 +760,7 @@ async def on_ready() -> None:
     await sync_guild_commands()
     if STATUS_CHANNEL_ID and PUBLIC_IP and not refresh_page_mirror.is_running():
         refresh_page_mirror.start()
-    if STATUS_CHANNEL_ID and not downtime_tick.is_running():
+    if downtime.next_restart() is not None and not downtime_tick.is_running():
         downtime_tick.start()
         nxt = downtime.next_restart()
         print(f"downtime next={nxt.isoformat() if nxt else 'off'}")
@@ -753,7 +784,8 @@ async def downtime_next(interaction: discord.Interaction) -> None:
     await interaction.response.send_message(
         f"Next recycle **{downtime.restart_clock_label(nxt)}** "
         f"({nxt.strftime('%Y-%m-%d %H:%M %Z')}) — in {mins}m {secs}s.\n"
-        "Countdown posts in #server-status at 10m / 5m / 1m / 30s / 5s.",
+        "Countdown posts in #server-status at 10m / 5m / 1m / 30s / 5s. "
+        "At 0 the deploy pipeline applies queued updates and recycles.",
         ephemeral=True,
     )
 
@@ -771,7 +803,8 @@ async def downtime_drill(interaction: discord.Interaction, seconds: int = 20) ->
     downtime_tick.change_interval(seconds=0.2)
     await interaction.response.send_message(
         f"Armed a **{seconds}s** countdown in #server-status. "
-        "Does **not** restart lobbies. In-game chat still follows the real 3:00 AM clock.",
+        "Does **not** restart lobbies or queue the deploy pipeline. "
+        "In-game chat still follows the real 3:00 AM clock.",
         ephemeral=True,
     )
 

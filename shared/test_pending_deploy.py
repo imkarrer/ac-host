@@ -50,6 +50,14 @@ class BuildkiteTriggerTests(unittest.TestCase):
         self.assertEqual(payload["commit"], "HEAD")
         self.assertEqual(payload["env"]["SERIES_ID"], "series-1")
 
+    def test_downtime_payload(self) -> None:
+        payload = buildkite_trigger.build_payload(
+            message="03:00 apply + recycle",
+            env={"DOWNTIME": "1"},
+        )
+        self.assertEqual(payload["env"]["DOWNTIME"], "1")
+        self.assertNotIn("SERIES_ID", payload["env"])
+
     def test_configured(self) -> None:
         self.assertFalse(buildkite_trigger.configured(token="", org="imkarrer", pipeline="ac-host"))
         self.assertTrue(

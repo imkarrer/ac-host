@@ -1,7 +1,7 @@
 # Agent on ac-box. Queue=self. MinIO cache at http://minio:9000.
 #
 # Modes (build env):
-#   DOWNTIME=1   → apply folded pending-src + one recycle (03:00 schedule)
+#   DOWNTIME=1   → apply folded pending-src + one recycle (bot countdown)
 #   EMERGENCY=1  → apply-now (drain + resume), skips CI
 #   SERIES_ID    → race pack only (/admin quali-close)
 #   else         → test, lint, queue-prod, pages (no lobby kick)

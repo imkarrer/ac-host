@@ -69,3 +69,10 @@ def trigger(
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:400]
         raise RuntimeError(f"Buildkite trigger failed HTTP {exc.code}: {detail}") from exc
+
+
+def trigger_downtime() -> dict[str, Any] | None:
+    """Queue the 03:00 apply + recycle job. None if Buildkite env is missing."""
+    if not configured():
+        return None
+    return trigger(message="03:00 apply + recycle", env={"DOWNTIME": "1"})

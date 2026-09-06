@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """03:00 deploy: apply the folded pending tree, then recycle practice once.
 
-Last green ``queue-prod`` wins (pending-src is one directory). This job is the
-only recycle — do not unblock every paused Apply-now step.
+The Discord countdown queues this job (DOWNTIME=1). Last green
+``queue-prod`` wins. ``/downtime-drill`` must not call this.
 """
 
 from __future__ import annotations

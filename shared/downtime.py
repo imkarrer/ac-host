@@ -6,7 +6,7 @@ Kunos has no wall-clock restart. Practice TIME is minutes from lobby start, so a
 
 - set TIME to minutes until the next 03:00
 - warn at 10m / 5m / 1m / 30s / 5s / 4 / 3 / 2 / 1
-- systemd recycles containers at 03:00
+- at mark 0 the bot queues ``DOWNTIME=1`` (apply + one recycle)
 """
 
 from __future__ import annotations
@@ -22,6 +22,12 @@ DEFAULT_TZ = "America/Chicago"
 COUNTDOWN_MARKS = (600, 300, 60, 30, 5, 4, 3, 2, 1, 0)
 MENTION_MARKS = frozenset({600, 300, 60})
 EDIT_MARKS = frozenset({5, 4, 3, 2, 1})
+PIPELINE_MARK = 0
+
+
+def should_trigger_pipeline(mark: int, *, drill: bool) -> bool:
+    """Real 03:00 hit only. ``/downtime-drill`` must not queue a recycle."""
+    return mark == PIPELINE_MARK and not drill
 
 
 def zone_name() -> str:

@@ -41,7 +41,7 @@ def main() -> int:
     )
     print(f"queued {sha} rebuild_sidecars={rebuild} -> {path}")
     print(f"tree {dest}")
-    print("folded into pending-src; 03:00 DOWNTIME=1 applies once")
+    print("folded into pending-src; bot 03:00 countdown applies once")
     return 0
 
 
