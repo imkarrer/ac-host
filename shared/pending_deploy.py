@@ -43,11 +43,21 @@ PENDING_SRC_NAME = "pending-src"
 #                                      any deploy step -- an rsync --delete
 #                                      here breaks download links with no
 #                                      error until a player's client 404s.
+#
+#   .env.*                         -> compose/.env.buildkite holds the live
+#                                     BUILDKITE_AGENT_TOKEN, MINIO_ROOT_PASSWORD
+#                                     and S3 cache keys. The plain ".env" entry
+#                                     below does NOT cover it: rsync matches that
+#                                     pattern as an exact basename, and
+#                                     ".env.buildkite" is not ".env". Deleting it
+#                                     leaves the CI agent and the binary cache
+#                                     without credentials.
 PRESERVE_LOCAL = (
     "hosts/*/hardware-configuration.nix",
     "hosts/*/ssh-keys.local.nix",
     "dist/*.zip",
     "dist/content.json",
+    ".env.*",
 )
 
 RSYNC_EXCLUDES = (
