@@ -19,6 +19,26 @@ PENDING_NAME = "pending-deploy.json"
 APPLIED_NAME = "last-applied.json"
 PENDING_SRC_NAME = "pending-src"
 
+# Machine-local state that lives in the deployed tree but is deliberately NOT in
+# git, so it can never appear in pending-src. Without these excludes, the
+# `rsync --delete` below removes them and the next nixos-rebuild silently
+# degrades the box:
+#
+#   hardware-configuration.nix  -> configuration.nix falls back to the .example
+#                                  stub, which says of itself "will not boot a
+#                                  real machine". The switch succeeds, writes
+#                                  boot entries from the stub, and the box does
+#                                  not come back from its next reboot.
+#   ssh-keys.local.nix          -> sshKeys evaluates to [ ], removing every
+#                                  authorized key for root and nixosuser.
+#
+# Anything else that is gitignored *and* lives under the deployed tree belongs
+# in this list too.
+PRESERVE_LOCAL = (
+    "hosts/*/hardware-configuration.nix",
+    "hosts/*/ssh-keys.local.nix",
+)
+
 RSYNC_EXCLUDES = (
     ".git/",
     "__pycache__/",
@@ -28,7 +48,7 @@ RSYNC_EXCLUDES = (
     ".flox/log/",
     "*.pyc",
     ".env",
-)
+) + PRESERVE_LOCAL
 
 SIDECAR_PATHS = ("sidecar/", "bot/", "compose/docker-compose.yml")
 
@@ -140,8 +160,23 @@ def sync_tree(src: Path, dest: Path) -> None:
         cmd.extend([str(src) + "/", str(dest) + "/"])
         subprocess.run(cmd, check=True)
         return
+    # No rsync: refuse rather than destroy. This fallback rmtree()s dest before
+    # copying, so ignore_patterns cannot protect PRESERVE_LOCAL -- those files
+    # are already deleted by the time copytree decides what to skip. Preserving
+    # them here would mean copying them aside and restoring, which adds a
+    # partial-restore failure mode to the one code path nobody exercises (rsync
+    # is in environment.systemPackages and rsyncd runs on this host).
+    #
+    # Failing loudly is strictly better than a deploy that boots into the
+    # hardware-configuration stub with no SSH keys.
     if dest.exists():
-        shutil.rmtree(dest)
+        raise RuntimeError(
+            f"rsync not found on PATH, refusing to sync into existing {dest}. "
+            "The non-rsync path cannot preserve machine-local files "
+            f"({', '.join(PRESERVE_LOCAL)}); it would delete them and the next "
+            "nixos-rebuild would fall back to the hardware-configuration stub "
+            "with an empty authorized-keys list. Install rsync and retry."
+        )
     shutil.copytree(
         src,
         dest,
