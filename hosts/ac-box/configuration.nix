@@ -81,6 +81,17 @@ in
     stateDir = "/var/lib/ac-host-dev";
   };
 
+  # Isolation only: paths + LAN rsync. Game daemons stay off until battle-test.
+  # Does not change Docker or AC firewall. Rebuild must not bounce docker.service.
+  services.arcade-hub = {
+    enable = true;
+    lanAddress = "192.168.1.50";
+    gameInterface = "enp8s0";
+    rsync.enable = true;
+    freeciv.enable = true;
+    mindustry.enable = true;
+  };
+
   users.users.nixosuser = {
     isNormalUser = true;
     description = "Primary Server Operator";
