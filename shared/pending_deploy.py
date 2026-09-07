@@ -52,12 +52,22 @@ PENDING_SRC_NAME = "pending-src"
 #                                     ".env.buildkite" is not ".env". Deleting it
 #                                     leaves the CI agent and the binary cache
 #                                     without credentials.
+#
+#   _extract/                      -> 452 MB of intermediate car-content
+#                                     tarballs, referenced by
+#                                     scripts/pack_content.py so not scratch.
+#                                     gr86 and civic have finished dist/ zips,
+#                                     but e30 and na-elise do not -- roughly
+#                                     87 MB of packaging work whose only copy
+#                                     is here. Caught by dry-running the very
+#                                     first sync before letting it run.
 PRESERVE_LOCAL = (
     "hosts/*/hardware-configuration.nix",
     "hosts/*/ssh-keys.local.nix",
     "dist/*.zip",
     "dist/content.json",
     ".env.*",
+    "_extract/",
 )
 
 RSYNC_EXCLUDES = (
