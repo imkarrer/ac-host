@@ -41,6 +41,23 @@ class PendingDeployTests(unittest.TestCase):
             self.assertFalse((dest / ".env").exists())
             self.assertFalse((dest / ".flox" / "cache").exists())
 
+    def test_sync_tree_preserves_local_dist_artifacts(self) -> None:
+        """dist/*.zip and dist/content.json are gitignored box state, like the
+        hardware-configuration.nix / ssh-keys.local.nix case: pending-src can
+        never contain them, so rsync --delete must not remove them either."""
+        with tempfile.TemporaryDirectory() as raw:
+            src = Path(raw) / "src"
+            dest = Path(raw) / "dest"
+            (src / "scripts").mkdir(parents=True)
+            (src / "scripts" / "hi.py").write_text("x\n", encoding="utf-8")
+            (dest / "dist").mkdir(parents=True)
+            (dest / "dist" / "abarth_124_2016.zip").write_text("car\n", encoding="utf-8")
+            (dest / "dist" / "content.json").write_text("{}\n", encoding="utf-8")
+            pending_deploy.sync_tree(src, dest)
+            self.assertTrue((dest / "scripts" / "hi.py").is_file())
+            self.assertTrue((dest / "dist" / "abarth_124_2016.zip").is_file())
+            self.assertTrue((dest / "dist" / "content.json").is_file())
+
 
 class BuildkiteTriggerTests(unittest.TestCase):
     def test_payload_includes_series_env(self) -> None:

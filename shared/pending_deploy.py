@@ -34,9 +34,20 @@ PENDING_SRC_NAME = "pending-src"
 #
 # Anything else that is gitignored *and* lives under the deployed tree belongs
 # in this list too.
+#
+#   dist/*.zip, dist/content.json  -> car-content downloads and the manifest
+#                                      the player page and CM read to fetch
+#                                      them. Gitignored (built once, some of
+#                                      it hand-placed third-party
+#                                      redistributables), and not rebuilt by
+#                                      any deploy step -- an rsync --delete
+#                                      here breaks download links with no
+#                                      error until a player's client 404s.
 PRESERVE_LOCAL = (
     "hosts/*/hardware-configuration.nix",
     "hosts/*/ssh-keys.local.nix",
+    "dist/*.zip",
+    "dist/content.json",
 )
 
 RSYNC_EXCLUDES = (
