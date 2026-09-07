@@ -11,12 +11,14 @@
     in
     {
       nixosModules.ac-host = import ./modules/ac-host.nix;
+      nixosModules.arcade-hub = import ./modules/arcade-hub.nix;
       nixosModules.default = self.nixosModules.ac-host;
 
       nixosConfigurations.ac-box = nixpkgs.lib.nixosSystem {
         inherit system;
         modules = [
           self.nixosModules.ac-host
+          self.nixosModules.arcade-hub
           ./modules/monitoring.nix
           ./hosts/ac-box/configuration.nix
         ];
