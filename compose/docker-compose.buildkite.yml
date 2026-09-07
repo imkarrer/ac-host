@@ -8,6 +8,33 @@
 #   docker compose -f compose/docker-compose.buildkite.yml --env-file compose/.env.buildkite up -d --build
 #
 # First image build is heavy (flox + SEED_PACKAGES). Keep it off race night.
+#
+# CPU FENCING (cgroup_parent, below)
+#
+# Every service here sets `cgroup_parent: batch.slice`, the slice homelab's
+# tenant contract creates for the batch tier. Without it a Nix build in this
+# agent can take all 56 threads, including the cores the live race servers run
+# on -- verified: the agent's effective cpuset was 0-55.
+#
+# It has to be set HERE, on the containers, and cannot be solved by wrapping
+# this stack in a systemd unit. Container cgroup placement is decided by
+# dockerd, not by the cgroup of whoever invoked docker: these containers are
+# started from an SSH session (user.slice) yet land in system.slice, as
+# siblings of any invoking unit rather than children of its slice.
+#
+# Verified on ac-box (systemd cgroup driver, cgroup v2):
+#   docker run --rm --cgroup-parent=batch.slice alpine cat \
+#     /sys/fs/cgroup/cpuset.cpus.effective   ->  28-55
+#   docker run --rm                   alpine ... same path  ->  0-55
+#
+# batch.slice also carries MemoryMax (~25 GiB on ac-box, derived from the tier's
+# share of declared capacity). If a build ever OOMs, that is the number to
+# revisit -- in homelab's hosts/<host>/host.nix and tier shares, not here.
+#
+# cgroup_parent applies at container CREATION. Existing containers keep their
+# old placement until recreated, and recreating the agent kills the process that
+# deploys this box -- so adopt this from a plain SSH session, never through a
+# pipeline step running on the agent itself.
 
 name: ac-host-ci
 
@@ -15,6 +42,7 @@ services:
   minio:
     image: minio/minio:latest
     restart: unless-stopped
+    cgroup_parent: batch.slice
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
@@ -27,6 +55,7 @@ services:
 
   minio-init:
     image: minio/mc:latest
+    cgroup_parent: batch.slice
     depends_on:
       minio:
         condition: service_started
@@ -42,6 +71,8 @@ services:
     entrypoint: ["/bin/sh", "/minio-init.sh"]
 
   agent:
+    # The one that matters: this is where `nix build` runs.
+    cgroup_parent: batch.slice
     build:
       context: "${FLOX_PLUGIN_CONTEXT:-https://github.com/imkarrer/flox-buildkite-plugin.git#main}"
       dockerfile: Dockerfile
