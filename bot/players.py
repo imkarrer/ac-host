@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+NUMBER_MIN = 1
+NUMBER_MAX = 999
+
 NOT_BOT_REGISTERED = (
     "You're not registered with the bot yet.\n"
-    "Run `/steam-request` with your Steam profile URL "
-    "(`https://steamcommunity.com/profiles/7656…`), then wait for an admin to **Approve**.\n"
+    "Run `/intake` with your Steam profile URL "
+    "(`https://steamcommunity.com/profiles/7656…`) **and** a race number 1–999, "
+    "then wait for an admin to **Approve**.\n"
     "A manual server entry is not enough — register first, then set your car/color."
 )
 
@@ -87,6 +91,85 @@ def player_public_name(player: dict) -> str:
     if name:
         return name
     return f"`{player.get('steam_id')}`"
+
+
+def normalize_number(raw: str | int) -> str:
+    """Canonical race number: digits only, 1–999, no leading zeros."""
+    text = str(raw).strip().lstrip("#")
+    if not text.isdigit():
+        raise ValueError("Race number must be 1–999")
+    value = int(text)
+    if value < NUMBER_MIN or value > NUMBER_MAX:
+        raise ValueError(f"Race number must be {NUMBER_MIN}–{NUMBER_MAX}")
+    return str(value)
+
+
+def player_number(player: dict | None) -> str:
+    if not player:
+        return ""
+    raw = str(player.get("number") or "").strip()
+    if not raw:
+        return ""
+    try:
+        return normalize_number(raw)
+    except ValueError:
+        return ""
+
+
+def set_number(player: dict, number: str | int) -> str:
+    cleaned = normalize_number(number)
+    player["number"] = cleaned
+    player["number_updated_at"] = utcnow()
+    return cleaned
+
+
+def find_number_holder(
+    data: dict,
+    number: str | int,
+    *,
+    except_steam: str | None = None,
+    except_discord: str | None = None,
+) -> dict | None:
+    """Enabled player who already reserved this race number, if any."""
+    want = normalize_number(number)
+    for player in data.get("players") or []:
+        if not player.get("enabled", True):
+            continue
+        have = player_number(player)
+        if have != want:
+            continue
+        steam = str(player.get("steam_id") or "")
+        discord_id = str(player.get("discord_id") or "")
+        if except_steam and steam == except_steam:
+            continue
+        if except_discord and except_discord != "0" and discord_id == except_discord:
+            continue
+        return player
+    return None
+
+
+def find_pending_number(
+    requests: list[dict],
+    number: str | int,
+    *,
+    except_discord: str | None = None,
+) -> dict | None:
+    """Another pending intake already claiming this number."""
+    want = normalize_number(number)
+    for item in requests:
+        if item.get("status") != "pending":
+            continue
+        if except_discord and item.get("discord_id") == except_discord:
+            continue
+        raw = str(item.get("number") or "").strip()
+        if not raw:
+            continue
+        try:
+            if normalize_number(raw) == want:
+                return item
+        except ValueError:
+            continue
+    return None
 
 
 def set_livery(player: dict, car: str, skin: str) -> None:

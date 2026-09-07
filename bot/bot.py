@@ -35,13 +35,18 @@ from players import (
     NOT_BOT_REGISTERED,
     clear_livery,
     find_livery_holder,
+    find_number_holder,
     find_pending_item,
     find_pending_livery_combo,
+    find_pending_number,
     find_player,
     format_livery,
+    is_bot_registered,
+    normalize_number,
     player_for_discord,
     player_public_name,
     set_livery,
+    set_number,
     utcnow,
 )
 
@@ -269,7 +274,8 @@ def upsert_player(
     member: discord.Member,
     profile_url: str,
     enabled: bool = True,
-) -> None:
+    number: str = "",
+) -> dict:
     roles = member_role_names(member)
     if enabled and REQUIRED_ROLE not in roles:
         roles = [*roles, REQUIRED_ROLE]
@@ -287,18 +293,49 @@ def upsert_player(
                     "linked_at": player.get("linked_at") or utcnow(),
                 }
             )
-            return
-    players.append(
-        {
-            "steam_id": steam_id,
-            "discord_id": str(member.id),
-            "discord_name": str(member),
-            "profile_url": profile_url,
-            "roles": roles,
-            "enabled": enabled,
-            "linked_at": utcnow(),
-        }
+            if number:
+                set_number(player, number)
+            return player
+    player = {
+        "steam_id": steam_id,
+        "discord_id": str(member.id),
+        "discord_name": str(member),
+        "profile_url": profile_url,
+        "roles": roles,
+        "enabled": enabled,
+        "linked_at": utcnow(),
+    }
+    if number:
+        set_number(player, number)
+    players.append(player)
+    return player
+
+
+def number_taken_message(
+    data: dict,
+    requests: list[dict],
+    number: str,
+    *,
+    except_steam: str = "",
+    except_discord: str = "",
+) -> str:
+    holder = find_number_holder(
+        data, number, except_steam=except_steam or None, except_discord=except_discord or None
     )
+    if holder:
+        return f"#{number} is already reserved by {player_public_name(holder)}."
+    pending = find_pending_number(requests, number, except_discord=except_discord or None)
+    if pending:
+        return f"#{number} is already in a pending intake for <@{pending['discord_id']}>."
+    return ""
+
+
+def stamp_series_number(steam_id: str, number: str) -> None:
+    try:
+        import series_lib
+    except ImportError:
+        return
+    series_lib.stamp_player_number(WHITELIST_PATH.parent, steam_id=steam_id, number=number)
 
 
 def disable_discord(data: dict, discord_id: str) -> bool:
@@ -322,12 +359,14 @@ def request_embed(item: dict, *, status: str | None = None) -> discord.Embed:
         "denied": discord.Color.red(),
     }.get(state, discord.Color.greyple())
     embed = discord.Embed(
-        title=f"Steam link request ({state})",
+        title=f"Intake ({state})",
         color=color,
         timestamp=datetime.now(timezone.utc),
     )
     embed.add_field(name="Discord", value=f"<@{item['discord_id']}>\n`{item.get('discord_name')}`", inline=True)
     embed.add_field(name="SteamID64", value=f"`{item['steam_id']}`", inline=True)
+    number = str(item.get("number") or "").strip()
+    embed.add_field(name="Number", value=f"#{number}" if number else "—", inline=True)
     embed.add_field(name="Profile", value=item["profile_url"], inline=False)
     embed.set_footer(text=f"request {item['id']}")
     return embed
@@ -401,36 +440,54 @@ async def finalize_request(interaction: discord.Interaction, request_id: str, *,
             member = None
 
     if approve:
+        want_number = str(item.get("number") or "").strip()
+        data = load_whitelist()
+        if want_number:
+            clash = number_taken_message(
+                data,
+                pending.get("requests") or [],
+                want_number,
+                except_steam=str(item.get("steam_id") or ""),
+                except_discord=str(item.get("discord_id") or ""),
+            )
+            if clash:
+                await interaction.response.send_message(
+                    f"Cannot approve: {clash} Ask them to `/intake` with a free number.",
+                    ephemeral=True,
+                )
+                return
         if member is None:
             await interaction.response.send_message(
                 "Approved Steam id, but Discord member is not in the server anymore.",
                 ephemeral=True,
             )
             # still write whitelist with stored discord_id
-            data = load_whitelist()
             players = data.setdefault("players", [])
-            players.append(
-                {
-                    "steam_id": item["steam_id"],
-                    "discord_id": item["discord_id"],
-                    "discord_name": item.get("discord_name") or "",
-                    "profile_url": item["profile_url"],
-                    "roles": [REQUIRED_ROLE],
-                    "enabled": True,
-                    "linked_at": utcnow(),
-                }
-            )
+            row = {
+                "steam_id": item["steam_id"],
+                "discord_id": item["discord_id"],
+                "discord_name": item.get("discord_name") or "",
+                "profile_url": item["profile_url"],
+                "roles": [REQUIRED_ROLE],
+                "enabled": True,
+                "linked_at": utcnow(),
+            }
+            if want_number:
+                set_number(row, want_number)
+            players.append(row)
             save_whitelist(data)
+            stamp_series_number(str(item["steam_id"]), want_number)
         else:
-            data = load_whitelist()
             upsert_player(
                 data,
                 steam_id=item["steam_id"],
                 member=member,
                 profile_url=item["profile_url"],
                 enabled=True,
+                number=want_number,
             )
             save_whitelist(data)
+            stamp_series_number(str(item["steam_id"]), want_number)
             role = discord.utils.get(guild.roles, name=REQUIRED_ROLE) if guild else None
             if role and role not in member.roles and guild.me.top_role > role:
                 try:
@@ -444,8 +501,9 @@ async def finalize_request(interaction: discord.Interaction, request_id: str, *,
         await interaction.response.edit_message(embed=request_embed(item), view=None)
         if member:
             try:
+                number_note = f" Number **#{item['number']}** is yours." if item.get("number") else ""
                 await member.send(
-                    f"Your Steam link was **approved**. Profile: {item['profile_url']}\n"
+                    f"Your intake was **approved**. Profile: {item['profile_url']}.{number_note}\n"
                     f"You can join the practice lobbies (role `{REQUIRED_ROLE}`)."
                 )
             except discord.HTTPException:
@@ -823,9 +881,10 @@ async def steam_help(interaction: discord.Interaction) -> None:
         "**Register**\n"
         "1. Steam → your name → **View my profile**.\n"
         "2. Right‑click the page → **Copy Page URL**.\n"
-        "3. Here: `/steam-request` and paste that URL.\n"
+        "3. Here: `/intake` — paste that URL **and** pick a race number 1–999.\n"
         "4. Wait for an admin to **Approve** (you’ll get a DM if possible).\n"
-        "5. Join from Content Manager after you’re approved.\n\n"
+        "5. Join from Content Manager after you’re approved.\n"
+        "Already approved? `/intake` with just a number reserves or changes it.\n\n"
         "**Livery (one car + color)**\n"
         "After Steam approval: `/livery-set` → pick car → pick color. "
         "An **admin must Approve** before it is reserved. "
@@ -834,7 +893,7 @@ async def steam_help(interaction: discord.Interaction) -> None:
         "Only **one** preference (a new request replaces the old one after approval). "
         "Each car+color can be held by **one** person.\n"
         "`/livery-show` · `/livery-clear`\n"
-        "If you were added by hand, `/livery-set` fails until you `/steam-request` and get approved.\n\n"
+        "If you were added by hand, `/livery-set` fails until you `/intake` and get approved.\n\n"
         f"**Cars on practice**\n{car_line}\n"
         "We add cars by need. Want another? Post in **#feature-requests**.\n\n"
         "**Tracks** (drop the zip on Content Manager, or join and Download missing content)\n"
@@ -972,26 +1031,54 @@ async def livery_admin_set(
     )
 
 
-@bot.tree.command(
-    name="steam-request",
-    description="Request access — paste either /id/ or /profiles/ Steam URL",
-)
-@app_commands.describe(
-    profile="Either https://steamcommunity.com/id/name OR /profiles/7656… — both work"
-)
-async def steam_request(interaction: discord.Interaction, profile: str) -> None:
+async def submit_intake(
+    interaction: discord.Interaction,
+    number: int,
+    profile: str = "",
+) -> None:
     if not isinstance(interaction.user, discord.Member):
         await interaction.response.send_message("Use this command in the server.", ephemeral=True)
         return
+    try:
+        want = normalize_number(number)
+    except ValueError as exc:
+        await interaction.response.send_message(str(exc), ephemeral=True)
+        return
 
-    parsed = parse_profile(profile)
-    slug = None if parsed else vanity_slug(profile)
+    data = load_whitelist()
+    pending = load_pending()
+    requests = pending.setdefault("requests", [])
+    me = player_for_discord(data, str(interaction.user.id))
+    clash = number_taken_message(
+        data,
+        requests,
+        want,
+        except_steam=str((me or {}).get("steam_id") or ""),
+        except_discord=str(interaction.user.id),
+    )
+    if clash:
+        await interaction.response.send_message(clash, ephemeral=True)
+        return
+
+    if me:
+        set_number(me, want)
+        save_whitelist(data)
+        stamp_series_number(str(me.get("steam_id") or ""), want)
+        await interaction.response.send_message(
+            f"Number **#{want}** is reserved for you. Same number on series signup.",
+            ephemeral=True,
+        )
+        return
+
+    profile = (profile or "").strip()
+    parsed = parse_profile(profile) if profile else None
+    slug = None if parsed else vanity_slug(profile) if profile else None
     if not parsed and not slug:
         await interaction.response.send_message(
-            "Need a Steam profile URL — **either** form is fine:\n"
+            "Need a Steam profile URL **and** a number.\n"
             "`https://steamcommunity.com/id/yourname`\n"
             "`https://steamcommunity.com/profiles/76561198000000000`\n"
-            "Steam → View my profile → right‑click → **Copy Page URL**, then paste that.",
+            "Steam → View my profile → right‑click → **Copy Page URL**, then `/intake`.",
             ephemeral=True,
         )
         return
@@ -999,6 +1086,7 @@ async def steam_request(interaction: discord.Interaction, profile: str) -> None:
     await interaction.response.defer(ephemeral=True)
     if parsed:
         steam_id, profile_url = parsed
+        reason = "parsed"
     else:
         resolved = resolve_vanity(slug or "")
         if resolved[0] is None:
@@ -1009,6 +1097,15 @@ async def steam_request(interaction: discord.Interaction, profile: str) -> None:
             )
             return
         steam_id, profile_url = resolved
+        reason = resolved[1] if len(resolved) > 1 else "resolved"
+
+    other = find_player(data, steam_id=steam_id)
+    if other and is_bot_registered(other) and str(other.get("discord_id") or "") != str(interaction.user.id):
+        await interaction.followup.send(
+            f"That Steam ID is already linked to {player_public_name(other)}.",
+            ephemeral=True,
+        )
+        return
 
     ok, reason = profile_reachable(profile_url)
     if not ok:
@@ -1019,12 +1116,15 @@ async def steam_request(interaction: discord.Interaction, profile: str) -> None:
         )
         return
 
-    pending = load_pending()
-    requests = pending.setdefault("requests", [])
     existing = find_pending(requests, discord_id=str(interaction.user.id))
     if existing:
+        existing["steam_id"] = steam_id
+        existing["profile_url"] = profile_url
+        existing["number"] = want
+        existing["profile_check"] = reason
+        save_pending(pending)
         await interaction.followup.send(
-            f"You already have a pending request (`{existing['id']}`). Wait for an admin to review it.",
+            f"Updated your pending intake (`{existing['id']}`) — **#{want}**.\n{profile_url}",
             ephemeral=True,
         )
         return
@@ -1036,6 +1136,7 @@ async def steam_request(interaction: discord.Interaction, profile: str) -> None:
         "discord_name": str(interaction.user),
         "steam_id": steam_id,
         "profile_url": profile_url,
+        "number": want,
         "status": "pending",
         "created_at": utcnow(),
         "profile_check": reason,
@@ -1064,16 +1165,48 @@ async def steam_request(interaction: discord.Interaction, profile: str) -> None:
 
     if posted:
         await interaction.followup.send(
-            f"Request submitted. Admins will review your profile:\n{profile_url}",
+            f"Intake submitted — **#{want}** reserved pending approval.\n{profile_url}",
             ephemeral=True,
         )
     else:
         await interaction.followup.send(
-            f"Request `{request_id}` saved, but **no review channel** is configured "
+            f"Intake `{request_id}` saved (**#{want}**), but **no review channel** is configured "
             f"(`DISCORD_REVIEW_CHANNEL_ID`). Tell an admin to set that, or use "
             f"`/steam-approve` / `/steam-deny`.\nProfile: {profile_url}",
             ephemeral=True,
         )
+
+
+@bot.tree.command(
+    name="intake",
+    description="Onboard: Steam profile + reserve a race number (1–999)",
+)
+@app_commands.describe(
+    number="Race number 1–999. Yours for practice and the series.",
+    profile="Steam /id/ or /profiles/ URL. Skip if you are already approved.",
+)
+async def intake(
+    interaction: discord.Interaction,
+    number: app_commands.Range[int, 1, 999],
+    profile: str = "",
+) -> None:
+    await submit_intake(interaction, int(number), profile)
+
+
+@bot.tree.command(
+    name="steam-request",
+    description="Same as /intake — Steam link + race number",
+)
+@app_commands.describe(
+    number="Race number 1–999",
+    profile="Either https://steamcommunity.com/id/name OR /profiles/7656…",
+)
+async def steam_request(
+    interaction: discord.Interaction,
+    number: app_commands.Range[int, 1, 999],
+    profile: str = "",
+) -> None:
+    await submit_intake(interaction, int(number), profile)
 
 
 @bot.tree.command(name="steam-approve", description="Admin: approve a pending Steam link for a user")
@@ -1093,8 +1226,16 @@ async def steam_approve(
         return
     # Reuse finalize via a fake edit path: apply whitelist directly
     data = load_whitelist()
-    upsert_player(data, steam_id=item["steam_id"], member=user, profile_url=item["profile_url"], enabled=True)
+    upsert_player(
+        data,
+        steam_id=item["steam_id"],
+        member=user,
+        profile_url=item["profile_url"],
+        enabled=True,
+        number=str(item.get("number") or ""),
+    )
     save_whitelist(data)
+    stamp_series_number(str(item["steam_id"]), str(item.get("number") or ""))
     item["status"] = "approved"
     item["resolved_at"] = utcnow()
     item["resolved_by"] = str(interaction.user.id)
@@ -1169,6 +1310,17 @@ async def on_member_update(before: discord.Member, after: discord.Member) -> Non
 
 
 def main() -> None:
+    from series_cmds import register_series_commands
+
+    register_series_commands(
+        bot,
+        is_admin=is_admin,
+        is_whitelisted=lambda m: REQUIRED_ROLE in member_role_names(m),
+        player_for_discord=player_for_discord,
+        player_public_name=player_public_name,
+        required_role=REQUIRED_ROLE,
+        admin_role=ADMIN_ROLE,
+    )
     token = os.environ.get("DISCORD_TOKEN")
     if not token:
         raise SystemExit("DISCORD_TOKEN is not set")

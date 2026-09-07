@@ -1,1 +1,7 @@
 discord.py==2.4.0
+# Numbered-livery generation (scripts/generate_series_liveries.py). Pillow reads
+# and writes the DDS body texture, NumPy rasterizes the door UV mask and the
+# offline proof render, SciPy supplies the distance transform that places the badge.
+pillow==11.0.0
+numpy==2.1.3
+scipy==1.14.1

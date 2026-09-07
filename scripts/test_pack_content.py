@@ -54,6 +54,7 @@ class PackContentTests(unittest.TestCase):
     def test_csp_cars_are_marked_in_catalog(self):
         self.assertTrue(car_requires_csp("pc_civic"))
         self.assertTrue(car_requires_csp("tbb_toyota_gr86_premium"))
+        self.assertTrue(car_requires_csp("some1_honda_nsx_1997_s1"))
         self.assertFalse(car_requires_csp("abarth_124_2016"))
 
     def test_cm_asset_url_picks_named_zip(self):

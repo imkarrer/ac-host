@@ -5,7 +5,7 @@ CM only fetches this when the server name contains ℹ<port>.
 We advertise Practice (session type 1) so the Online "Skin for booking"
 thumbnail row stays hidden — pickup cannot honor that pick anyway.
 
-Keep pickup=true and still embed content.json for CM auto-download of the 124.
+Keep pickup=true and still embed content.json for CM auto-download of hosted cars.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ PREFERRED_SKIN = {
     "abarth_124_2016": "02_Bianco",
     "tbb_toyota_gr86_premium": "04_trueno_blue",
     "pc_civic": "Championship White",
+    "some1_honda_nsx_1997_s1": "grand_prix_white_b",
     "ks_mazda_miata": "02_crystal_white",
     "lotus_elise_sc": "0_racing_green",
     "bmw_m3_e30": "alpine_white",

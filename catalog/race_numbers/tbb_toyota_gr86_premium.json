@@ -1,0 +1,19 @@
+{
+  "car": "tbb_toyota_gr86_premium",
+  "notes": "Body material ext_body, txDiffuse ext_body_Mixed_AO.dds (2048x2048). The body is one mesh (222_T), so placement uses the generic side zone plus UV island selection to pick the door panel rather than the fender or quarter. Factory skins colour the car through cm_skin.json carPaint; generation bakes that colour into the diffuse and sets carPaint.enabled false.",
+  "zone": {
+    "y_min": 0.15,
+    "y_max": 0.95,
+    "z_min": 0.25,
+    "z_max": 0.75
+  },
+  "style": {},
+  "reference": {
+    "texture": "ext_body_Mixed_AO.dds",
+    "texture_size": [2048, 2048],
+    "placements": [
+      { "side": "left", "center": [1010, 186], "diameter": 224, "panel": "222_T" },
+      { "side": "right", "center": [1010, 1498], "diameter": 230, "panel": "222_T" }
+    ]
+  }
+}

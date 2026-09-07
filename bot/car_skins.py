@@ -10,6 +10,7 @@ PRACTICE_CARS = [
     "abarth_124_2016",
     "tbb_toyota_gr86_premium",
     "pc_civic",
+    "some1_honda_nsx_1997_s1",
     "ks_mazda_miata",
     "lotus_elise_sc",
     "bmw_m3_e30",
@@ -29,6 +30,42 @@ def load_car_display_names(catalog: Path) -> dict[str, str]:
         folder = str(data.get("folder") or path.stem)
         names[folder] = str(data.get("displayName") or folder)
     return names
+
+
+def skin_display_name(skin_dir: Path) -> str:
+    ui = skin_dir / "ui_skin.json"
+    if ui.is_file():
+        try:
+            data = json.loads(ui.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        name = str(data.get("skinname") or "").strip()
+        if name:
+            return name
+    return skin_dir.name
+
+
+def list_signup_skins(content: Path, car: str) -> list[tuple[str, str]]:
+    """Factory paint folders for series signup: (folder_id, display label)."""
+    skins_root = content / "cars" / car / "skins"
+    if not skins_root.is_dir():
+        return []
+    out: list[tuple[str, str]] = []
+    for path in sorted(skins_root.iterdir()):
+        if not path.is_dir() or path.name.startswith("."):
+            continue
+        if "owner_white" in path.name.lower():
+            continue
+        if not path.name[:2].isdigit():
+            continue
+        if not (
+            (path / "ui_skin.json").is_file()
+            or (path / "preview.jpg").is_file()
+            or (path / "skin.ini").is_file()
+        ):
+            continue
+        out.append((path.name, skin_display_name(path)))
+    return out
 
 
 def list_skins(content: Path, car: str) -> list[str]:

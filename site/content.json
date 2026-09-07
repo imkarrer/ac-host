@@ -3,6 +3,14 @@
     "abarth_124_2016": {
       "url": "https://github.com/imkarrer/ac-practice/releases/download/content/abarth_124_2016.zip",
       "version": "2.2"
+    },
+    "tbb_toyota_gr86_premium": {
+      "url": "https://github.com/imkarrer/ac-practice/releases/download/content/tbb_toyota_gr86_premium.zip",
+      "version": "2.0.1"
+    },
+    "pc_civic": {
+      "url": "https://github.com/imkarrer/ac-practice/releases/download/content/pc_civic.zip",
+      "version": "1.02"
     }
   },
   "tracks": {

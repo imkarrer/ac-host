@@ -1,24 +1,33 @@
 # Player status page (GitHub Pages)
 
-Templates use `__AC_*__` placeholders. Configure **ac-host `.env`**, then:
+Public repo for the join README and live leaderboard. **Do not** copy the whole `ac-host` tree here — it contains NixOS host config and secrets paths.
 
-```bash
-python scripts/render_site.py
-# push dist/site/ to your Pages repo (AC_GITHUB_REPO)
-```
+## One-time setup
 
-| Path | Role |
+1. Create a public repo (default name `ac-practice`).
+2. Copy everything in this `site/` folder to the repo root (`index.html`, `content.json`, `leaderboard.json`, this README).
+3. Replace `imkarrer` in `content.json` with your GitHub username (or edit after `publish_124.py` runs).
+4. Enable **GitHub Pages**: Settings → Pages → Deploy from branch → `main` / root.
+5. Create a fine-grained PAT with **Contents: Read and write** on this repo only. On the NixOS box, set `GITHUB_STATUS_TOKEN` in `/var/lib/ac-host/.env` (never commit it).
+6. Upload the patched 124 zip once: `python scripts/publish_124.py --owner imkarrer` from `ac-host/` on your PC.
+
+Pages URL: `https://imkarrer.github.io/ac-practice/`
+
+## Live status (push from home server)
+
+The game box runs `plugin.py`, which writes `leaderboard.json` locally and PUTs the same JSON to this repo via the GitHub Contents API. No inbound port on the home server.
+
+| Env var | Example |
 | --- | --- |
-| `/` | Production |
-| `/dev/` | Test lobby |
+| `GITHUB_STATUS_TOKEN` | fine-grained PAT |
+| `GITHUB_STATUS_REPO` | `yourname/ac-practice` |
+| `GITHUB_STATUS_BRANCH` | `main` |
+| `GITHUB_STATUS_PATH` | `leaderboard.json` |
 
-Status push from the game box uses `GITHUB_STATUS_*` in `.env`. After each
-successful JSON PUT the plugin also POSTs a ping to `STATUS_EVENT_URL` (default
-`https://ntfy.sh/ac-<owner>-<repo>-status`). The page listens on that topic and
-refetches `leaderboard.json` immediately, then retries a few seconds for Pages CDN
-lag. A 15s poll stays as fallback.
+Occupancy and laps may lag ~30–60s (debounce + Pages CDN). The page shows the `updated` timestamp.
 
-The header light is the box, not lobby occupancy. `leaderboard.json` `status` is
-`maintenance` / `down` / `up`. The plugin heartbeats `aliveAt` over ntfy every
-60s so an empty lobby stays green. Flip it with `python scripts/acctl.py
-maintenance --on --message "…"` (and `--off` when you're back).
+## Content Manager
+
+`content.json` in this repo lists **only** the patched 124 Spider (GitHub Release). GR86, Civic, tracks, and CSP must be installed from the source links on `index.html` before joining. CM “Download missing content” will fetch the 124 only.
+
+On the game box, set `AC_GITHUB_OWNER`, `AC_GITHUB_REPO`, and `AC_PAGES_URL` in `.env` so `acctl.py` generates matching `state/dist/content.json` for the details sidecar.

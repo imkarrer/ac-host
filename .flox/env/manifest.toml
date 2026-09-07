@@ -12,6 +12,12 @@ git.pkg-path = "git"
 pillow.pkg-path = "python312Packages.pillow"
 rsync.pkg-path = "rsync"
 numpy.pkg-path = "python312Packages.numpy"
+# Race-number rendering needs a scalable font. shared/skin_livery.py raises
+# "no scalable font found for the race number" without one, failing five tests in
+# scripts/test_skin_livery.py. The series work was developed directly on the box
+# and so never ran through this environment, which is why the dependency was
+# never declared. AC_NUMBER_FONT overrides the choice.
+dejavu_fonts.pkg-path = "dejavu_fonts"
 nixfmt-rfc-style.pkg-path = "nixfmt-rfc-style"
 gh.pkg-path = "gh"
 python312Full.pkg-path = "python312Full"

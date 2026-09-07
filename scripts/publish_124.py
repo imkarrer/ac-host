@@ -17,11 +17,12 @@ from pack_content import pack_car  # noqa: E402
 
 CAR = "abarth_124_2016"
 ZIP_NAME = f"{CAR}.zip"
+DEV_ZIP_NAME = f"{CAR}-dev.zip"
 RELEASE_TAG = "content"
 
 
-def release_url(owner: str, repo: str) -> str:
-    return f"https://github.com/{owner}/{repo}/releases/download/{RELEASE_TAG}/{ZIP_NAME}"
+def release_url(owner: str, repo: str, asset: str = ZIP_NAME) -> str:
+    return f"https://github.com/{owner}/{repo}/releases/download/{RELEASE_TAG}/{asset}"
 
 
 def pages_url(owner: str, repo: str) -> str:
@@ -71,6 +72,15 @@ def main() -> None:
     )
     parser.add_argument("--skip-check", action="store_true")
     parser.add_argument("--no-upload", action="store_true", help="Pack only; do not call gh")
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help=(
+            f"Publish to the dev-only asset {DEV_ZIP_NAME} and write dist/content.dev.json. "
+            "Prod's zip and manifests are left alone; point the dev stack at it with "
+            "AC_124_RELEASE_URL."
+        ),
+    )
     args = parser.parse_args()
     sys.path.insert(0, str(REPO / "scripts"))
     import settings
@@ -82,7 +92,8 @@ def main() -> None:
 
     out = args.out
     out.mkdir(parents=True, exist_ok=True)
-    zip_path = pack_car(args.ac_root, CAR, out, skip_check=args.skip_check)
+    asset = DEV_ZIP_NAME if args.dev else ZIP_NAME
+    zip_path = pack_car(args.ac_root, CAR, out, skip_check=args.skip_check, dest_name=asset)
 
     ui_car = args.ac_root / "content" / "cars" / CAR / "ui" / "ui_car.json"
     car_ver = None
@@ -97,11 +108,22 @@ def main() -> None:
     else:
         print(f"content.json version aligned to ui_car.json {version}")
 
-    site_content = REPO / "site" / "content.json"
-    write_content_json(site_content, owner, repo, car_version=version)
+    if args.dev:
+        # Dev gets its own asset and its own manifest so prod keeps serving the old zip.
+        write_content_json(
+            out / "content.dev.json",
+            owner,
+            repo,
+            car_version=version,
+            car_url=release_url(owner, repo, asset),
+            content_root=args.ac_root,
+        )
+    else:
+        site_content = REPO / "site" / "content.json"
+        write_content_json(site_content, owner, repo, car_version=version, content_root=args.ac_root)
 
-    dist_content = out / "content.json"
-    write_content_json(dist_content, owner, repo, car_version=version)
+        dist_content = out / "content.json"
+        write_content_json(dist_content, owner, repo, car_version=version, content_root=args.ac_root)
 
     if args.no_upload:
         print(f"packed {zip_path}; skipped upload")
@@ -116,8 +138,13 @@ def main() -> None:
         ["gh", "release", "upload", RELEASE_TAG, str(zip_path), "--repo", slug, "--clobber"],
         check=True,
     )
-    print(f"uploaded {ZIP_NAME} to {release_url(owner, repo)}")
-    print(f"Pages URL: {pages_url(owner, repo)}")
+    print(f"uploaded {asset} to {release_url(owner, repo, asset)}")
+    if args.dev:
+        print("dev only: prod zip and manifests untouched")
+        print(f"set AC_124_RELEASE_URL={release_url(owner, repo, asset)} on the dev stack")
+        print(f"copy {out / 'content.dev.json'} to /var/lib/ac-host-dev/dist/content.json")
+    else:
+        print(f"Pages URL: {pages_url(owner, repo)}")
 
 
 if __name__ == "__main__":

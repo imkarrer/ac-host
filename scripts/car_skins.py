@@ -10,6 +10,7 @@ PRACTICE_CARS = [
     "abarth_124_2016",
     "tbb_toyota_gr86_premium",
     "pc_civic",
+    "some1_honda_nsx_1997_s1",
     "ks_mazda_miata",
     "lotus_elise_sc",
     "bmw_m3_e30",

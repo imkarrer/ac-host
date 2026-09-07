@@ -81,7 +81,12 @@ class BotRegistrationTests(unittest.TestCase):
         }
         self.assertIsNone(player_for_discord(data, "267079254141960193"))
         self.assertIsNone(player_for_discord({"players": []}, "1"))
-        self.assertIn("/steam-request", NOT_BOT_REGISTERED)
+        # The unregistered-user copy now points at /intake, which asks for the
+        # Steam URL and a race number together, rather than at /steam-request.
+        # Both commands still exist in bot.py; only the guidance changed. This
+        # assertion still tested the old wording because the change was made
+        # directly on the box and never ran through CI.
+        self.assertIn("/intake", NOT_BOT_REGISTERED)
 
 
 class LiveryCollisionTests(unittest.TestCase):

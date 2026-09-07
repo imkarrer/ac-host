@@ -74,6 +74,23 @@ def github_status_repo() -> str:
     return getenv("GITHUB_STATUS_REPO") or f"{github_owner()}/{github_pages_repo()}"
 
 
+def status_event_sse() -> str:
+    """Browser EventSource URL. Plugin POSTs to the matching ntfy topic after each JSON push."""
+    explicit = getenv("STATUS_EVENT_SSE")
+    if explicit:
+        return explicit
+    topic = getenv("STATUS_EVENT_URL")
+    if topic.endswith("/sse"):
+        return topic
+    if topic:
+        return topic.rstrip("/") + "/sse"
+    repo = github_status_repo()
+    owner, _, name = repo.partition("/")
+    if not owner or not name or owner == "OWNER":
+        return ""
+    return f"https://ntfy.sh/ac-{owner}-{name}-status/sse"
+
+
 def pages_url(*, dev: bool = False) -> str:
     explicit = getenv("AC_PAGES_URL") or getenv("AC_CONTENT_URL")
     if explicit:
@@ -89,6 +106,24 @@ def release_124_url() -> str:
     return (
         getenv("AC_124_RELEASE_URL")
         or f"https://github.com/{github_owner()}/{github_pages_repo()}/releases/download/content/abarth_124_2016.zip"
+    )
+
+
+def release_124_dev_url() -> str:
+    """Dev-only 124 zip, so dev can test car changes without touching prod's asset.
+
+    On the box the dev stack sets AC_124_RELEASE_URL in /var/lib/ac-host-dev/.env and
+    that is enough, because settings reads $AC_STATE/.env first. Rendering the site
+    covers both environments in one process, so the dev page needs its own key.
+    """
+    return getenv("AC_124_DEV_RELEASE_URL") or release_124_url()
+
+
+def release_car_url(folder: str) -> str:
+    if folder == "abarth_124_2016":
+        return release_124_url()
+    return (
+        f"https://github.com/{github_owner()}/{github_pages_repo()}/releases/download/content/{folder}.zip"
     )
 
 

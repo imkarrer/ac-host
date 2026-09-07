@@ -231,43 +231,206 @@
     {
       "id": 9,
       "type": "stat",
-      "title": "Scrapes",
-      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 48 },
+      "title": "node",
+      "description": "Host CPU/RAM/disk/load. Green = Prometheus got a reply.",
+      "gridPos": { "h": 3, "w": 5, "x": 0, "y": 48 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
+          "color": { "mode": "thresholds" },
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
-          ]
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "semi-dark-red" },
+                "1": { "text": "UP", "color": "semi-dark-green" }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "semi-dark-red", "value": null },
+              { "color": "semi-dark-green", "value": 1 }
+            ]
+          },
+          "noValue": "DOWN"
         },
         "overrides": []
       },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
       "targets": [
-        {
-          "refId": "A",
-          "expr": "up{job=\"node\"}",
-          "legendFormat": "node"
+        { "refId": "A", "expr": "up{job=\"node\"}", "legendFormat": "node", "instant": true }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "cadvisor",
+      "description": "Container CPU/RAM. Green = Prometheus got a reply.",
+      "gridPos": { "h": 3, "w": 5, "x": 5, "y": 48 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "semi-dark-red" },
+                "1": { "text": "UP", "color": "semi-dark-green" }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "semi-dark-red", "value": null },
+              { "color": "semi-dark-green", "value": 1 }
+            ]
+          },
+          "noValue": "DOWN"
         },
-        {
-          "refId": "B",
-          "expr": "up{job=\"cadvisor\"}",
-          "legendFormat": "cadvisor"
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
+      "targets": [
+        { "refId": "A", "expr": "up{job=\"cadvisor\"}", "legendFormat": "cadvisor", "instant": true }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "unpoller",
+      "description": "Dream Router CPU/RAM/WAN. Green = Prometheus got a reply.",
+      "gridPos": { "h": 3, "w": 4, "x": 10, "y": 48 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "semi-dark-red" },
+                "1": { "text": "UP", "color": "semi-dark-green" }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "semi-dark-red", "value": null },
+              { "color": "semi-dark-green", "value": 1 }
+            ]
+          },
+          "noValue": "DOWN"
         },
-        {
-          "refId": "C",
-          "expr": "up{job=\"unpoller\"}",
-          "legendFormat": "unpoller"
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
+      "targets": [
+        { "refId": "A", "expr": "up{job=\"unpoller\"}", "legendFormat": "unpoller", "instant": true }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "udr-fw",
+      "description": "WAN / port-forward hits. Green = Prometheus got a reply.",
+      "gridPos": { "h": 3, "w": 5, "x": 14, "y": 48 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "semi-dark-red" },
+                "1": { "text": "UP", "color": "semi-dark-green" }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "semi-dark-red", "value": null },
+              { "color": "semi-dark-green", "value": 1 }
+            ]
+          },
+          "noValue": "DOWN"
         },
-        {
-          "refId": "D",
-          "expr": "up{job=\"udr-fw\"}",
-          "legendFormat": "udr-fw"
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
+      "targets": [
+        { "refId": "A", "expr": "up{job=\"udr-fw\"}", "legendFormat": "udr-fw", "instant": true }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "docker-names",
+      "description": "Maps container hashes to names. Green = Prometheus got a reply.",
+      "gridPos": { "h": 3, "w": 5, "x": 19, "y": 48 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "semi-dark-red" },
+                "1": { "text": "UP", "color": "semi-dark-green" }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "semi-dark-red", "value": null },
+              { "color": "semi-dark-green", "value": 1 }
+            ]
+          },
+          "noValue": "DOWN"
         },
-        {
-          "refId": "E",
-          "expr": "up{job=\"docker-names\"}",
-          "legendFormat": "docker-names"
-        }
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
+      "targets": [
+        { "refId": "A", "expr": "up{job=\"docker-names\"}", "legendFormat": "docker-names", "instant": true }
       ]
     }
   ]

@@ -47,6 +47,7 @@ PREFERRED_SKIN = {
     "abarth_124_2016": "02_Bianco",
     "tbb_toyota_gr86_premium": "04_trueno_blue",
     "pc_civic": "Championship White",
+    "some1_honda_nsx_1997_s1": "grand_prix_white_b",
     "ks_mazda_miata": "02_crystal_white",
     "lotus_elise_sc": "0_racing_green",
     "bmw_m3_e30": "alpine_white",
@@ -161,6 +162,222 @@ def entry_list(
             )
         )
     return "\n\n".join(blocks) + "\n"
+
+
+def series_entry_list(
+    drivers: list[dict],
+    *,
+    content: Path | None = None,
+) -> str:
+    """Build a locked grid: CAR_0 = pole, CAR_1 = P2, … each GUID pinned."""
+    blocks: list[str] = []
+    for index, driver in enumerate(drivers):
+        model = str(driver.get("car") or "")
+        guid = str(driver.get("steam_id") or "")
+        if not model or not guid:
+            continue
+        skin = str(driver.get("skin") or "")
+        if not skin:
+            skin = skin_for_slot(model, index, "pinned", content)
+        if content is not None:
+            allowed = list_skins(content, model)
+            if allowed and skin and skin not in allowed:
+                skin = allowed[0]
+        name = str(driver.get("name") or "")
+        blocks.append(
+            "\n".join(
+                [
+                    f"[CAR_{len(blocks)}]",
+                    f"MODEL={model}",
+                    f"SKIN={skin}",
+                    "SPECTATOR_MODE=0",
+                    f"DRIVERNAME={name}",
+                    "TEAM=",
+                    f"GUID={guid}",
+                    "BALLAST=0",
+                    "RESTRICTOR=0",
+                ]
+            )
+        )
+    return "\n\n".join(blocks) + "\n"
+
+
+def series_server_cfg(
+    *,
+    name: str,
+    track: dict,
+    car: str,
+    mode: str,
+    udp: int,
+    tcp: int,
+    http: int,
+    auth: str,
+    admin_password: str,
+    max_clients: int,
+    qual_minutes: int = 12,
+    race_minutes: int = 20,
+    legal_tyres: str = "ST",
+) -> str:
+    """Series modes: quali-hotlap | race-live | race-only."""
+    auth_line = f"{auth}/?" if auth else ""
+    plugin_local, plugin_event = plugin_ports(udp)
+    listed = register_to_lobby()
+    sessions: list[str] = []
+
+    if mode == "quali-hotlap":
+        sessions = [
+            "[PRACTICE]",
+            "NAME=Quali hotlap",
+            "TIME=180",
+            "IS_OPEN=1",
+            "",
+        ]
+    elif mode == "race-live":
+        sessions = [
+            "[QUALIFY]",
+            "NAME=Qualify",
+            f"TIME={qual_minutes}",
+            "IS_OPEN=1",
+            "",
+            "[RACE]",
+            "NAME=Race",
+            "LAPS=0",
+            f"TIME={race_minutes}",
+            "WAIT_TIME=60",
+            "IS_OPEN=1",
+            "",
+        ]
+    elif mode == "race-only":
+        # TIME=0 skips quali; grid comes from entry_list.ini order (async quali).
+        sessions = [
+            "[QUALIFY]",
+            "NAME=Qualify",
+            "TIME=0",
+            "IS_OPEN=1",
+            "",
+            "[RACE]",
+            "NAME=Race",
+            "LAPS=0",
+            f"TIME={race_minutes}",
+            "WAIT_TIME=60",
+            "IS_OPEN=1",
+            "",
+        ]
+    else:
+        raise ValueError(f"unknown series mode {mode!r}")
+
+    return "\n".join(
+        [
+            "[SERVER]",
+            f"NAME={name}",
+            f"CARS={car}",
+            f"CONFIG_TRACK={track.get('layout') or ''}",
+            f"TRACK={track['folder']}",
+            "SUN_ANGLE=48",
+            "PASSWORD=",
+            f"ADMIN_PASSWORD={admin_password}",
+            f"UDP_PORT={udp}",
+            f"TCP_PORT={tcp}",
+            f"HTTP_PORT={http}",
+            "PICKUP_MODE_ENABLED=1",
+            "LOOP_MODE=0",
+            "SLEEP_TIME=1",
+            "CLIENT_SEND_INTERVAL_HZ=18",
+            "SEND_BUFFER_SIZE=0",
+            "RECV_BUFFER_SIZE=0",
+            "RACE_OVER_TIME=180",
+            "KICK_QUORUM=85",
+            "VOTING_QUORUM=80",
+            "VOTE_DURATION=20",
+            "BLACKLIST_MODE=1",
+            "FUEL_RATE=100",
+            "DAMAGE_MULTIPLIER=100",
+            "TYRE_WEAR_RATE=100",
+            "ALLOWED_TYRES_OUT=2",
+            "ABS_ALLOWED=1",
+            "TC_ALLOWED=1",
+            "STABILITY_ALLOWED=0",
+            "AUTOCLUTCH_ALLOWED=0",
+            "TYRE_BLANKETS_ALLOWED=1",
+            "FORCE_VIRTUAL_MIRROR=1",
+            f"REGISTER_TO_LOBBY={listed}",
+            f"MAX_CLIENTS={max_clients}",
+            f"UDP_PLUGIN_LOCAL_PORT={plugin_local}",
+            f"UDP_PLUGIN_ADDRESS=127.0.0.1:{plugin_event}",
+            f"AUTH_PLUGIN_ADDRESS={auth_line}",
+            f"LEGAL_TYRES={legal_tyres}",
+            "LOCKED_ENTRY_LIST=1",
+            "WELCOME_MESSAGE=cfg/welcome.txt",
+            "",
+            *sessions,
+            "[DYNAMIC_TRACK]",
+            "SESSION_START=100",
+            "RANDOMNESS=0",
+            "SESSION_TRANSFER=100",
+            "LAP_GAIN=0",
+            "",
+            "[WEATHER_0]",
+            "GRAPHICS=3_clear",
+            "BASE_TEMPERATURE_AMBIENT=22",
+            "BASE_TEMPERATURE_ROAD=8",
+            "VARIATION_AMBIENT=0",
+            "VARIATION_ROAD=0",
+            "WIND_BASE_SPEED_MIN=0",
+            "WIND_BASE_SPEED_MAX=0",
+            "WIND_BASE_DIRECTION=0",
+            "WIND_VARIATION_DIRECTION=0",
+            "",
+        ]
+    )
+
+
+def render_series_instance(
+    *,
+    out: Path,
+    name: str,
+    track: dict,
+    car: str,
+    mode: str,
+    drivers: list[dict],
+    max_clients: int,
+    udp: int,
+    http: int,
+    auth: str,
+    admin_password: str,
+    content: Path | None,
+    qual_minutes: int = 12,
+    race_minutes: int = 20,
+    legal_tyres: str = "ST",
+) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    slots = max(len(drivers), min(max_clients, int(track.get("maxClients") or max_clients)))
+    (out / "server_cfg.ini").write_text(
+        series_server_cfg(
+            name=name,
+            track=track,
+            car=car,
+            mode=mode,
+            udp=udp,
+            tcp=udp,
+            http=http,
+            auth=auth,
+            admin_password=admin_password,
+            max_clients=slots,
+            qual_minutes=qual_minutes,
+            race_minutes=race_minutes,
+            legal_tyres=legal_tyres,
+        ),
+        encoding="utf-8",
+    )
+    (out / "entry_list.ini").write_text(
+        series_entry_list(drivers, content=content),
+        encoding="utf-8",
+    )
+    (out / "welcome.txt").write_text(
+        "Series event — install mods from the player page before joining.\n"
+        f"Player page: {pages_url()}\n",
+        encoding="utf-8",
+    )
 
 
 def server_cfg(
@@ -351,8 +568,8 @@ def main() -> None:
     (args.out / "welcome.txt").write_text(
         "Install mods from the player page before joining.\n"
         f"Player page: {pages_url()}\n"
-        "Content Manager Online can auto-download only the 124 Spider.\n"
-        "Install CSP, GR86, Civic, and this track from the page first.\n",
+        "Content Manager Online downloads the 124, GR86, Civic, and this track.\n"
+        "Miata, Elise, and E30 are in the base game. GR86 and Civic need CSP.\n",
         encoding="utf-8",
     )
     print(f"wrote {args.out / 'server_cfg.ini'}")

@@ -1,0 +1,42 @@
+{
+  "id": "series-1",
+  "displayName": "Fugazy Series #1",
+  "car": "tbb_toyota_gr86_premium",
+  "discordRole": "series-1",
+  "qualMode": "live",
+  "qualMinutes": 12,
+  "raceMinutes": 20,
+  "points": [10, 8, 6, 4, 2],
+  "fastestLapPoint": 1,
+  "dropRounds": 0,
+  "tyreCompound": "ST",
+  "maxDrivers": 20,
+  "rulesUrl": "",
+  "rounds": [
+    {
+      "id": "r00",
+      "track": "blackhawk",
+      "scheduled": null,
+      "pilot": true,
+      "notes": "Non-points infra test — settings from community poll"
+    },
+    {
+      "id": "r01",
+      "track": "blackhawk",
+      "scheduled": null,
+      "pilot": false
+    },
+    {
+      "id": "r02",
+      "track": "gingerman",
+      "scheduled": null,
+      "pilot": false
+    },
+    {
+      "id": "r03",
+      "track": "road-america",
+      "scheduled": null,
+      "pilot": false
+    }
+  ]
+}

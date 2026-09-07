@@ -1,0 +1,26 @@
+{
+  "car": "ks_mazda_miata",
+  "notes": "Body material ext_chassis, txDiffuse Skin_00.dds (2048x2048). The car names its door meshes (door_left at +X, door_right at -X), so placement comes straight off those meshes with no zone tuning. Coordinates below are re-derived from the KN5 every run and recorded so a regression trips a check instead of surfacing after someone loads the game.",
+  "zone": {},
+  "style": {},
+  "reference": {
+    "texture": "Skin_00.dds",
+    "texture_size": [2048, 2048],
+    "placements": [
+      { "side": "left", "center": [1022, 1814], "diameter": 217, "panel": "door_left" },
+      { "side": "right", "center": [1022, 678], "diameter": 217, "panel": "door_right" }
+    ],
+    "orientation": {
+      "left": "island is already upright - badge needs no transform",
+      "right": "island is packed at 180 degrees - badge is rotated 180"
+    }
+  },
+  "known_bad": {
+    "placements": [
+      { "side": "left", "center": [846, 1370], "panel": "GEO_Motorhood" },
+      { "side": "right", "center": [846, 234], "panel": "bumper_rear" }
+    ],
+    "why": "Produced when V was read as -v instead of v mod 1. The mask and the offline render shared that assumption, so both looked correct while the game painted the numbers on the hood and the rear bumper. These are the vertical mirror of the correct rows (2048 - y).",
+    "also": "A later build put the badges at (846, 1814) and (846, 678): the right panel, but backwards and too far forward. Two causes, both since anchored to plate textures - the flank renders were mirrored (AC's basis is right-handed, so screen right is -Z on the +X flank), and the zone's z fractions clipped the front of the door and dragged the centre rearward in texture space."
+  }
+}

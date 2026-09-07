@@ -73,8 +73,20 @@ def main() -> None:
         zips.append(pack_track(args.ac_root, item["folder"], out))
 
     version = args.car_version or existing_car_version(REPO / "site" / "content.json") or "2.2"
-    write_content_json(REPO / "site" / "content.json", owner, repo, car_version=version)
-    write_content_json(out / "content.json", owner, repo, car_version=version)
+    write_content_json(
+        REPO / "site" / "content.json",
+        owner,
+        repo,
+        car_version=version,
+        content_root=args.ac_root,
+    )
+    write_content_json(
+        out / "content.json",
+        owner,
+        repo,
+        car_version=version,
+        content_root=args.ac_root,
+    )
 
     if args.no_upload:
         print("packed tracks; skipped upload")

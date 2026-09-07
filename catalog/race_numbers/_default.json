@@ -1,0 +1,11 @@
+{
+  "style": {
+    "circle_fill": [255, 255, 255, 255],
+    "text_fill": [20, 20, 20, 255],
+    "outline": [20, 20, 20, 255],
+    "outline_width": 6,
+    "diameter_scale": 1.0,
+    "max_diameter": 0
+  },
+  "notes": "Badge style shared by every car. Placement is derived from the car KN5 (body material txDiffuse + door UV island), so no per-car pixel coordinates live here. Per-car files only override style or the 3D door 'zone' when the generic zone misses."
+}

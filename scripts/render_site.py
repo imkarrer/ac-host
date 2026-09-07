@@ -45,12 +45,16 @@ def load_env_files() -> None:
 
 def practice_car_list_html() -> str:
     from car_skins import PRACTICE_CARS, load_car_display_names
+    from content_manifest import is_downloadable_car
 
     names = load_car_display_names(REPO / "catalog")
     items = []
     for folder in PRACTICE_CARS:
         label = names.get(folder) or folder
-        items.append(f"<li>{label}</li>")
+        if is_downloadable_car(folder):
+            items.append(f'<li><a href="{settings.release_car_url(folder)}">{label}</a></li>')
+        else:
+            items.append(f"<li>{label}</li>")
     return "\n            ".join(items)
 
 
@@ -70,6 +74,7 @@ def substitute(text: str) -> str:
         "__AC_GITHUB_OWNER__": settings.github_owner(),
         "__AC_GITHUB_REPO__": settings.github_pages_repo(),
         "__AC_PAGES_URL__": settings.pages_url().rstrip("/"),
+        "__AC_STATUS_EVENTS__": settings.status_event_sse(),
         "__AC_124_RELEASE_URL__": settings.release_124_url(),
         "__AC_JOIN_8081__": settings.join_url(8081),
         "__AC_JOIN_8082__": settings.join_url(8082),
@@ -86,16 +91,19 @@ def substitute(text: str) -> str:
     return text
 
 
-def write_content_json(path: Path) -> None:
+def write_content_json(path: Path, *, dev: bool = False) -> None:
     from content_manifest import existing_car_version, write_content_json as write_manifest
 
-    version = existing_car_version(REPO / "site" / "content.json") or "2.2"
+    prod_template = REPO / "site" / "content.json"
+    template = REPO / "site" / "dev" / "content.json" if dev else prod_template
+    version = existing_car_version(template) or existing_car_version(prod_template) or "2.2"
     write_manifest(
         path,
         settings.github_owner(),
         settings.github_pages_repo(),
         car_version=version,
-        car_url=settings.release_124_url(),
+        car_url=settings.release_124_dev_url() if dev else settings.release_124_url(),
+        content_root=REPO.parent,
     )
 
 
@@ -138,7 +146,7 @@ def main() -> None:
         print(f"wrote {path}")
 
     write_content_json(out / "content.json")
-    write_content_json(out / "dev" / "content.json")
+    write_content_json(out / "dev" / "content.json", dev=True)
 
     if not args.in_place:
         car = REPO / "catalog" / "cars" / "abarth_124_2016.json"

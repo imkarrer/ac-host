@@ -1,0 +1,34 @@
+# Series quali / race servers — use with acctl start-series (do not `compose up` alone).
+#
+#   docker compose -f compose/docker-compose.yml -f compose/docker-compose.series.yml \
+#     --env-file $AC_STATE/.env --env-file $AC_STATE/series/.../series.env \
+#     --profile series up -d series-server
+#
+# ac-host_ac-server and ac-host_steam are shared with practice/race containers.
+
+services:
+  series-server:
+    image: ac-host-server:latest
+    network_mode: host
+    profiles: ["series"]
+    container_name: ${SERIES_CONTAINER_NAME:?set SERIES_CONTAINER_NAME}
+    restart: unless-stopped
+    environment:
+      STEAMCMD_LOGIN: ${STEAMCMD_LOGIN:-anonymous}
+      AC_CFG_DIR: /cfg
+      AC_CONTENT: /content
+      AC_RESULTS_DIR: /results
+    volumes:
+      - ac-server:/opt/ac
+      - steam:/home/ac/Steam
+      - ${AC_CONTENT:?set AC_CONTENT}:/content:ro
+      - ${SERIES_CFG_DIR:?set SERIES_CFG_DIR}:/cfg:ro
+      - ${SERIES_RESULTS_DIR:?set SERIES_RESULTS_DIR}:/results
+
+volumes:
+  ac-server:
+    external: true
+    name: ac-host_ac-server
+  steam:
+    external: true
+    name: ac-host_steam

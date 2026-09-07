@@ -15,7 +15,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-SKIP_DIR_NAMES = {"_extract", "__pycache__", "_paint_report"}
+SKIP_DIR_NAMES = {"_extract", "__pycache__", "_paint_report", "_number_report"}
 SKIP_FILE_NAMES = {
     "_patch_stripe_meshes.py",
     "_patch_lcd_mph.py",
@@ -55,7 +55,12 @@ STORE_SUFFIXES = {
     ".zip",
 }
 
-DEFAULT_CARS = ("abarth_124_2016", "tbb_toyota_gr86_premium", "pc_civic")
+DEFAULT_CARS = (
+    "abarth_124_2016",
+    "tbb_toyota_gr86_premium",
+    "pc_civic",
+    "some1_honda_nsx_1997_s1",
+)
 DEFAULT_TRACKS = ("slipangle_ggt", "lilski_road_america", "gingerman_raceway")
 CM_RELEASES_API = "https://api.github.com/repos/gro-ove/actools/releases/latest"
 CM_ZIP_NAME = "Content.Manager.zip"
@@ -125,7 +130,14 @@ def car_requires_csp(car: str) -> bool:
     return bool(json.loads(catalog.read_text(encoding="utf-8")).get("requiresCsp"))
 
 
-def pack_car(ac_root: Path, car: str, out_dir: Path, *, skip_check: bool = False) -> Path:
+def pack_car(
+    ac_root: Path,
+    car: str,
+    out_dir: Path,
+    *,
+    skip_check: bool = False,
+    dest_name: str | None = None,
+) -> Path:
     src = ac_root / "content" / "cars" / car
     if not skip_check and car_requires_csp(car):
         print(f"skip check_car for {car} (requires Custom Shaders Patch)")
@@ -138,7 +150,7 @@ def pack_car(ac_root: Path, car: str, out_dir: Path, *, skip_check: bool = False
             print(f"{item.level.upper()}: {item.where}: {item.message}")
         if any(item.level == "error" for item in issues):
             raise SystemExit(f"check_car failed for {car}; fix or pass --skip-check")
-    dest = out_dir / f"{car}.zip"
+    dest = out_dir / (dest_name or f"{car}.zip")
     pack_folder(src, dest)
     assert_zip_data_matches_source(src, dest)
     return dest

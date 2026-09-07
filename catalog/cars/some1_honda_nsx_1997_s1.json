@@ -1,0 +1,9 @@
+{
+  "id": "some1_honda_nsx_1997_s1",
+  "displayName": "Honda NSX NA2 S1 (1997)",
+  "folder": "some1_honda_nsx_1997_s1",
+  "legalTyres": ["ST", "SM", "OEM", "EPS", "HPS", "PAS"],
+  "requiresCsp": true,
+  "source": "https://www.assettoworld.com/car/honda-nsx-na2-s1",
+  "notes": "Some1 / Modek / Arch 3.0.0 from AssettoWorld. Folder name is the ACD key — do not rename. Custom Shaders Patch required."
+}
