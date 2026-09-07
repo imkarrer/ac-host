@@ -12,6 +12,7 @@
     {
       nixosModules.ac-host = import ./modules/ac-host.nix;
       nixosModules.arcade-hub = import ./modules/arcade-hub.nix;
+      nixosModules.monitoring = import ./modules/monitoring.nix;
       nixosModules.default = self.nixosModules.ac-host;
 
       nixosConfigurations.ac-box = nixpkgs.lib.nixosSystem {
