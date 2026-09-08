@@ -39,7 +39,10 @@ in
   users.users.unifi-poller.extraGroups = [ "monitoring" ];
   users.users.grafana.extraGroups = [ "monitoring" ];
 
-  networking.firewall.allowedTCPPorts = [ 3000 ];
+  # Scoped to the LAN NIC, not global. Grafana already binds 192.168.1.50, so a
+  # global opening bought nothing -- but it would have published the dashboard on
+  # a management link the moment the dual-NIC plan brought one up.
+  networking.firewall.interfaces.enp8s0.allowedTCPPorts = [ 3000 ];
 
   services.prometheus.exporters.node = {
     enable = true;

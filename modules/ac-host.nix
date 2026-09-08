@@ -50,6 +50,20 @@ in
       description = "Whitelist role the sidecar requires once authOpen is false.";
     };
 
+    lanInterface = lib.mkOption {
+      type = lib.types.str;
+      default = "enp8s0";
+      description = ''
+        NIC the lobby ports are opened on. The openings below are scoped to this
+        interface rather than global, so a second NIC does not inherit them --
+        ac-box's dual-NIC plan would otherwise have exposed every lobby HTTP and
+        details port on a management link the moment it came up.
+
+        External drivers are unaffected: unifi_pf.py forwards to this box's LAN
+        address, so forwarded traffic ingresses here and still matches.
+      '';
+    };
+
     gamePortStart = lib.mkOption {
       type = lib.types.port;
       default = 9600;
@@ -95,12 +109,19 @@ in
       pkgs.rsync
     ];
 
-    networking.firewall.allowedTCPPorts =
-      (portList cfg.gamePortStart cfg.gamePortCount)
-      ++ (portList cfg.httpPortStart cfg.gamePortCount)
-      ++ (portList cfg.detailsPortStart cfg.gamePortCount);
+    # Scoped to lanInterface, not global. These were
+    # networking.firewall.allowedTCPPorts, which applies to every NIC -- so the
+    # dual-NIC runbook would have published every lobby HTTP and details port on
+    # a management link the moment eno1 came up. Same ports, same reachability
+    # for real drivers, one fewer interface.
+    networking.firewall.interfaces.${cfg.lanInterface} = {
+      allowedTCPPorts =
+        (portList cfg.gamePortStart cfg.gamePortCount)
+        ++ (portList cfg.httpPortStart cfg.gamePortCount)
+        ++ (portList cfg.detailsPortStart cfg.gamePortCount);
 
-    networking.firewall.allowedUDPPorts = portList cfg.gamePortStart cfg.gamePortCount;
+      allowedUDPPorts = portList cfg.gamePortStart cfg.gamePortCount;
+    };
 
     systemd.tmpfiles.rules = [
       "d ${cfg.stateDir} 0750 root root -"
