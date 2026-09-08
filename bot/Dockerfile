@@ -9,5 +9,5 @@ RUN apt-get update \
 COPY bot/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY bot/bot.py bot/steam_parse.py bot/car_skins.py bot/players.py bot/page_mirror.py bot/series_cmds.py bot/series_poll.py bot/series_poll_content.py /app/
-COPY shared/downtime.py shared/series_lib.py shared/buildkite_trigger.py /app/
+COPY shared/downtime.py shared/series_lib.py shared/buildkite_trigger.py shared/atomic_json.py /app/
 CMD ["python", "-u", "/app/bot.py"]
