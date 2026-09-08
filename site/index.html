@@ -15,6 +15,15 @@
 <body>
   <div class="wrap">
     <header>
+      <nav class="site-nav" aria-label="Site">
+        <a class="nav-link on" href="index.html">Practice</a>
+        <a class="nav-link" href="series.html">Series</a>
+        <a class="nav-link ghost" href="__AC_DISCORD_INVITE__">Discord</a>
+        <p class="health" id="health" data-state="checking" role="status" aria-live="polite">
+          <span class="health-dot" aria-hidden="true"></span>
+          <span class="health-label">Checking…</span>
+        </p>
+      </nav>
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"></span>
         <p class="eyebrow">Fugazy Sim Racing</p>
@@ -22,6 +31,11 @@
       <h1>Practice</h1>
       <p class="lede">Private Assetto Corsa sessions. Get approved on Discord, then jump a lobby. Green is empty. Amber means someone’s already in.</p>
     </header>
+
+    <aside class="health-banner" id="health-banner" hidden>
+      <strong id="health-title">Down for maintenance</strong>
+      <p id="health-message">Practice servers are offline.</p>
+    </aside>
 
     <section class="card discord-step">
       <div class="copy">
@@ -111,6 +125,6 @@
       <div id="boards"><p class="muted">Loading times…</p></div>
     </section>
   </div>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
