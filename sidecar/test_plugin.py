@@ -156,6 +156,31 @@ class BoardTests(unittest.TestCase):
                 data = json.loads((root / "leaderboard.json").read_text(encoding="utf-8"))
                 self.assertTrue(data["aliveAt"])
 
+    def test_corrupt_leaderboard_refuses_to_load_rather_than_wipe(self) -> None:
+        # Leaderboard is the AUTHORITATIVE writer of leaderboard.json: its
+        # __init__ loads, then immediately saves (Plugin.__init__ calls
+        # board.clear_online(); board.save() right after construction).
+        # Before atomic_json, a corrupt file silently became {"lobbies": {}}
+        # here and got persisted right back a few lines later -- a transient
+        # read error turning into permanent loss of every driver's lap
+        # history. Must now raise instead of quietly returning an empty
+        # board.
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "leaderboard.json").write_text("{not valid json", encoding="utf-8")
+            with self.assertRaises(plugin.atomic_json.UnreadableJSON):
+                plugin.Leaderboard(
+                    path=root / "leaderboard.json",
+                    dist=root / "dist" / "leaderboard.json",
+                    statics=[{"id": "blackhawk", "name": "Blackhawk", "track": "blackhawk"}],
+                    car_names={},
+                )
+            # And the corrupt file itself must be left untouched -- refusing
+            # to load must not mean overwriting it with anything either.
+            self.assertEqual(
+                (root / "leaderboard.json").read_text(encoding="utf-8"), "{not valid json"
+            )
+
     def test_leaderboard_persists_and_session_reset(self) -> None:
         with patch("push_status.schedule_push"):
             with tempfile.TemporaryDirectory() as raw:

@@ -20,6 +20,8 @@ for _candidate in (_HERE, _HERE.parent / "shared"):
         sys.path.insert(0, str(_candidate))
         break
 
+import atomic_json
+
 HEARTBEAT_SEC = float(os.environ.get("STATUS_HEARTBEAT_SEC", "60"))
 
 # Must match scripts/render_cfg.py and scripts/acctl.py
@@ -48,13 +50,6 @@ ACSP_GET_SESSION_INFO = 204
 
 def utcnow() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def atomic_write(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
 
 
 class Reader:
@@ -412,7 +407,18 @@ class Leaderboard:
         self.payload = self._load()
 
     def _load(self) -> dict:
-        payload = load_json(self.path, {"updated": None, "lobbies": {}})
+        # This is the AUTHORITATIVE writer of leaderboard.json (save() below
+        # persists whatever this returns, immediately, at every Plugin
+        # startup) -- unlike acctl.publish_health, which only mirrors derived
+        # state into it. A read error here must never be swallowed into the
+        # empty-board default the way load_json's generic fallback would:
+        # that default gets saved right back a few lines after __init__
+        # calls this, which is exactly how a transient read error becomes
+        # permanent loss of every driver's lap history. Let UnreadableJSON
+        # propagate instead -- the plugin should fail to start, loudly,
+        # rather than quietly wipe the board.
+        existing_payload = atomic_json.read_json(self.path)
+        payload = existing_payload if existing_payload is not None else {"updated": None, "lobbies": {}}
         existing = payload.get("lobbies") or {}
         ordered: dict[str, dict] = {}
         for item in self.statics:
@@ -456,9 +462,8 @@ class Leaderboard:
         for lobby in self.payload["lobbies"].values():
             lobby["allTime"] = sort_entries(list(lobby.get("allTime") or []))
             lobby["session"] = sort_entries(list(lobby.get("session") or []))
-        text = json.dumps(self.payload, indent=2) + "\n"
-        atomic_write(self.path, text)
-        atomic_write(self.dist, text)
+        text = atomic_json.write_json(self.path, self.payload)
+        atomic_json.write_json(self.dist, self.payload)
         try:
             from push_status import schedule_push
 
@@ -472,9 +477,8 @@ class Leaderboard:
         self._apply_health()
         self.payload["aliveAt"] = utcnow()
         after = (self.payload.get("status"), self.payload.get("statusMessage"))
-        text = json.dumps(self.payload, indent=2) + "\n"
-        atomic_write(self.path, text)
-        atomic_write(self.dist, text)
+        text = atomic_json.write_json(self.path, self.payload)
+        atomic_json.write_json(self.dist, self.payload)
         try:
             if before != after:
                 from push_status import schedule_push
