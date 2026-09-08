@@ -339,22 +339,36 @@ def publish_health(*, on: bool, message: str = "") -> None:
         server_health.write_flag(STATE, message)
     else:
         server_health.clear_flag(STATE)
+    import atomic_json
+
     path = STATE / "leaderboard.json"
-    payload: dict = {}
-    if path.is_file():
-        try:
-            loaded = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                payload = loaded
-        except (OSError, json.JSONDecodeError):
-            payload = {}
+
+    # The health flag is already persisted by write_flag/clear_flag above. What
+    # follows only MIRRORS it into the player-page payload, which means an
+    # unreadable board must never be grounds for rewriting the board.
+    #
+    # This previously did `except (OSError, json.JSONDecodeError): payload = {}`
+    # and then wrote that empty object back, so one transient read error
+    # permanently erased every driver's standings -- on a path that runs at every
+    # boot via up-static. Skipping the mirror leaves the page showing stale
+    # health until the file is repaired, which is recoverable; erasing the
+    # standings is not.
+    try:
+        existing = atomic_json.read_json(path)
+    except atomic_json.UnreadableJSON as exc:
+        print(
+            f"WARNING: leaving {path} untouched, cannot merge health into it: {exc}",
+            file=sys.stderr,
+        )
+        return
+
+    payload: dict = existing if existing is not None else {}
     server_health.apply_to_payload(payload, STATE)
-    text = json.dumps(payload, indent=2) + "\n"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    dist = STATE / "dist" / "leaderboard.json"
-    dist.parent.mkdir(parents=True, exist_ok=True)
-    dist.write_text(text, encoding="utf-8")
+
+    # Atomic: several other writers touch this same file, and a truncate-then-write
+    # is what produces the unparseable input handled above.
+    text = atomic_json.write_json(path, payload)
+    atomic_json.write_json(STATE / "dist" / "leaderboard.json", payload)
     try:
         from push_status import get_pusher
 
