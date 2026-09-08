@@ -1,7 +1,39 @@
+# CPU/MEMORY FENCING (cgroup_parent, below)
+#
+# Every service that compose actually STARTS sets `cgroup_parent:
+# critical.slice`, the slice homelab's tenant contract creates for the tier
+# this tenant declares (homelab.tenants.assetto.tier = "critical").
+#
+# Same reasoning as compose/docker-compose.buildkite.yml, and the same trap:
+# container cgroup placement is decided by dockerd, not by the cgroup of
+# whoever invoked docker, so these land in system.slice as siblings of any
+# invoking unit rather than children of its slice. Wrapping the stack in a
+# systemd unit does not fix it -- and here it CANNOT be fixed that way even in
+# principle, because resources.nix deliberately never assigns Slice= to this
+# tenant: assetto is tier = critical AND quiet.drainable = false, so it is
+# excluded from slice assignment precisely to avoid the restart that applying
+# Slice= would force (ac-host-static's ExecStop is `docker rm -f`).
+#
+# Verified on ac-box before this change: every ac-host container reported
+# CgroupParent="" and ran under system.slice with MemoryMax=infinity and the
+# full 0-55 cpuset. So the racing stack was the one tenant on the box with no
+# resource ceiling at all.
+#
+# critical.slice carries MemoryMax (~25 GiB on ac-box, derived from the tier's
+# share of declared capacity) and CPUWeight, but deliberately NO AllowedCPUs:
+# critical is fenced AROUND, never confined itself, so races can still burst
+# onto every core when the background/batch tiers are idle. If a lobby ever
+# OOMs, the number to revisit is the tier share in homelab's
+# hosts/<host>/host.nix and configuration.nix, not this file.
+#
+# cgroup_parent applies at container CREATION. Existing containers keep their
+# old placement until recreated -- and recreating these means dropping live
+# lobbies, so adopt it in a maintenance window with no drivers connected.
 name: ac-host
 
 services:
   auth:
+    cgroup_parent: critical.slice
     build:
       context: ..
       dockerfile: sidecar/Dockerfile
@@ -18,6 +50,9 @@ services:
 
   # Image used by `python scripts/acctl.py up-static` for each catalog/statics.json lobby.
   # Not started by `compose up` itself — each lobby is its own container and port.
+  # No cgroup_parent here on purpose: compose never creates this container, so a
+  # key here would be dead config. The real placement is set by the
+  # `--cgroup-parent` flag in acctl.py's run_server_container().
   static:
     build:
       context: ../image
@@ -35,7 +70,8 @@ services:
       - ${AC_CONTENT:?set AC_CONTENT}:/content:ro
 
   # Template image for `python scripts/acctl.py start-race`.
-  # Not started by `compose up`.
+  # Not started by `compose up`. Same as `static` above: placement comes from
+  # run_server_container()'s --cgroup-parent, not from this file.
   race:
     image: ac-host-server:latest
     network_mode: host
@@ -52,6 +88,7 @@ services:
 
   # Content Manager /api/details so Online shows liveries (server name ends with ℹport).
   details:
+    cgroup_parent: critical.slice
     build:
       context: ..
       dockerfile: sidecar/Dockerfile
@@ -69,6 +106,7 @@ services:
 
   # UDP plugin: LAP_COMPLETED → state/leaderboard.json; optional push to GitHub Pages repo
   plugin:
+    cgroup_parent: critical.slice
     build:
       context: ..
       dockerfile: sidecar/Dockerfile
@@ -96,6 +134,7 @@ services:
       - ../catalog:/catalog:ro
 
   bot:
+    cgroup_parent: critical.slice
     build:
       context: ..
       dockerfile: bot/Dockerfile

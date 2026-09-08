@@ -407,6 +407,24 @@ def wait_lobby_http(*, timeout_sec: float = 90.0) -> bool:
     return False
 
 
+# The slice homelab's tenant contract creates for this tenant's declared tier
+# (homelab.tenants.assetto.tier = "critical"). Without --cgroup-parent, dockerd
+# places these containers in system.slice with MemoryMax=infinity and the full
+# host cpuset, regardless of which unit or session invoked docker -- verified on
+# ac-box, where every lobby reported CgroupParent="" and cpuset 0-55.
+#
+# critical.slice carries a MemoryMax but deliberately no AllowedCPUs, so a lobby
+# can still use every core when the background/batch tiers are idle. Same
+# mechanism and the same reasoning as the cgroup_parent keys in
+# compose/docker-compose.yml and compose/docker-compose.buildkite.yml; it has to
+# be a run flag here because these containers are created by docker run rather
+# than by compose.
+#
+# Applies at container CREATION only. Lobbies already running keep their old
+# placement until they are recreated (up-static / recycle-static).
+SERVER_CGROUP_PARENT = "critical.slice"
+
+
 def run_server_container(*, name: str, cfg: Path, results: Path) -> None:
     results.mkdir(parents=True, exist_ok=True)
     subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True)
@@ -417,6 +435,8 @@ def run_server_container(*, name: str, cfg: Path, results: Path) -> None:
             "-d",
             "--name",
             name,
+            "--cgroup-parent",
+            SERVER_CGROUP_PARENT,
             "--network",
             "host",
             "--restart",

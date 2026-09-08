@@ -27,6 +27,14 @@
 #     /sys/fs/cgroup/cpuset.cpus.effective   ->  28-55
 #   docker run --rm                   alpine ... same path  ->  0-55
 #
+# The 28-55 above is the value that WAS observed, and it turned out to be a bug
+# in homelab rather than a sane fence: on this box CPUs 28-55 are the SMT
+# siblings of 0-27, one per physical core, so batch was not separated from the
+# race servers at all -- it was given the second thread of every core they ran
+# on. homelab now computes the fence in physical cores, and batch has its own
+# block rather than sharing background's. Expect roughly "26-27,54-55" here;
+# re-run the check above rather than trusting either number.
+#
 # batch.slice also carries MemoryMax (~25 GiB on ac-box, derived from the tier's
 # share of declared capacity). If a build ever OOMs, that is the number to
 # revisit -- in homelab's hosts/<host>/host.nix and tier shares, not here.
