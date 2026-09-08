@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import threading
+import time
 from urllib.error import HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -135,10 +136,20 @@ class StatusPusher:
         post_status_event(updated or "updated")
 
 
+# ntfy answers 429 for the rest of the window once the budget is gone. Retrying
+# every beat cannot succeed and only spends the next window, so a failure parks
+# posting until this clears.
+EVENT_BACKOFF_SEC = float(os.environ.get("STATUS_EVENT_BACKOFF_SEC", "900"))
+_event_muted_until = 0.0
+
+
 def post_status_event(message: str) -> None:
     """POST to ntfy. Works without a GitHub token so heartbeats still fire."""
+    global _event_muted_until
     url = event_url()
     if not url:
+        return
+    if time.monotonic() < _event_muted_until:
         return
     req = Request(
         url,
@@ -154,7 +165,8 @@ def post_status_event(message: str) -> None:
             resp.read()
         print(f"status event posted {url}")
     except Exception as exc:
-        print(f"status event failed: {exc}")
+        _event_muted_until = time.monotonic() + EVENT_BACKOFF_SEC
+        print(f"status event failed: {exc}; muted {EVENT_BACKOFF_SEC:.0f}s")
 
 
 def notify_heartbeat() -> None:
@@ -169,7 +181,14 @@ def event_url() -> str:
     owner, _, name = repo.partition("/")
     if not owner or not name:
         return ""
-    return f"https://ntfy.sh/ac-{owner}-{name}-status"
+    # seed_github_env.py gives dev and prod the SAME GITHUB_STATUS_REPO and
+    # separates them only by GITHUB_STATUS_PATH. Without that in the topic both
+    # environments post to one stream, so dev heartbeats make the prod page look
+    # alive -- and, because ntfy meters anonymous publishes per IP, the two share
+    # one 250-message budget and drain it. Prod keeps the original topic name.
+    path = os.environ.get("GITHUB_STATUS_PATH", "").strip().lstrip("/")
+    suffix = "-dev" if path.startswith("dev/") else ""
+    return f"https://ntfy.sh/ac-{owner}-{name}-status{suffix}"
 
 
 def event_sse_url() -> str:

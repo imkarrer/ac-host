@@ -74,8 +74,14 @@ def github_status_repo() -> str:
     return getenv("GITHUB_STATUS_REPO") or f"{github_owner()}/{github_pages_repo()}"
 
 
-def status_event_sse() -> str:
-    """Browser EventSource URL. Plugin POSTs to the matching ntfy topic after each JSON push."""
+def status_event_sse(*, dev: bool = False) -> str:
+    """Browser EventSource URL. Plugin POSTs to the matching ntfy topic after each JSON push.
+
+    dev=True must track push_status.event_url, which suffixes the topic for the
+    dev environment. If the two disagree the dev page subscribes to prod and
+    reports prod's health as its own -- an explicit override still wins, since
+    an operator pointing both ends somewhere is pointing them at one place.
+    """
     explicit = getenv("STATUS_EVENT_SSE")
     if explicit:
         return explicit
@@ -88,7 +94,8 @@ def status_event_sse() -> str:
     owner, _, name = repo.partition("/")
     if not owner or not name or owner == "OWNER":
         return ""
-    return f"https://ntfy.sh/ac-{owner}-{name}-status/sse"
+    suffix = "-dev" if dev else ""
+    return f"https://ntfy.sh/ac-{owner}-{name}-status{suffix}/sse"
 
 
 def pages_url(*, dev: bool = False) -> str:

@@ -2,6 +2,7 @@ import json
 import struct
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -155,6 +156,26 @@ class BoardTests(unittest.TestCase):
                 self.assertFalse(mock_push.called)
                 data = json.loads((root / "leaderboard.json").read_text(encoding="utf-8"))
                 self.assertTrue(data["aliveAt"])
+
+    def test_touch_alive_pushes_once_the_floor_has_passed(self) -> None:
+        # aliveAt only reaches the page through a commit, and touch_alive skips
+        # the commit while nothing changes -- so an empty lobby would freeze the
+        # published timestamp until someone drove a lap. The floor breaks that.
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            board = plugin.Leaderboard(
+                path=root / "leaderboard.json",
+                dist=root / "dist" / "leaderboard.json",
+                statics=[{"id": "blackhawk", "name": "Blackhawk", "track": "blackhawk"}],
+                car_names={},
+            )
+            board._last_alive_push = time.monotonic() - plugin.ALIVE_PUSH_SEC - 1
+            with patch("push_status.schedule_push") as mock_push, patch(
+                "push_status.notify_heartbeat"
+            ) as mock_beat:
+                board.touch_alive()
+                self.assertTrue(mock_push.called)
+                self.assertFalse(mock_beat.called)
 
     def test_corrupt_leaderboard_refuses_to_load_rather_than_wipe(self) -> None:
         # Leaderboard is the AUTHORITATIVE writer of leaderboard.json: its

@@ -22,7 +22,16 @@ for _candidate in (_HERE, _HERE.parent / "shared"):
 
 import atomic_json
 
-HEARTBEAT_SEC = float(os.environ.get("STATUS_HEARTBEAT_SEC", "60"))
+# ntfy meters anonymous publishes at 250 per 12h per IP, i.e. one per 172.8s
+# sustained. At the old 60s this burned ~690 and went silent for most of every
+# window -- the page then saw no heartbeat and called the box down. 300s leaves
+# room for real push events, which share the budget.
+HEARTBEAT_SEC = float(os.environ.get("STATUS_HEARTBEAT_SEC", "300"))
+# aliveAt only reaches the page through a GitHub commit. touch_alive skips that
+# commit while nothing changes, so an empty lobby freezes the published
+# timestamp and the page eventually calls a healthy box stale. Push on this
+# floor regardless of change.
+ALIVE_PUSH_SEC = float(os.environ.get("STATUS_ALIVE_PUSH_SEC", "600"))
 
 # Must match scripts/render_cfg.py and scripts/acctl.py
 GAME_PORT_START = 9600
@@ -405,6 +414,9 @@ class Leaderboard:
         self.statics = statics
         self.car_names = car_names
         self.payload = self._load()
+        # Measured from construction, not from zero: starting at 0 would make the
+        # first heartbeat after every restart force a push.
+        self._last_alive_push: float = time.monotonic()
 
     def _load(self) -> dict:
         # This is the AUTHORITATIVE writer of leaderboard.json (save() below
@@ -479,11 +491,14 @@ class Leaderboard:
         after = (self.payload.get("status"), self.payload.get("statusMessage"))
         text = atomic_json.write_json(self.path, self.payload)
         atomic_json.write_json(self.dist, self.payload)
+        now = time.monotonic()
+        due = (now - self._last_alive_push) >= ALIVE_PUSH_SEC
         try:
-            if before != after:
+            if before != after or due:
                 from push_status import schedule_push
 
                 schedule_push(text)
+                self._last_alive_push = now
             else:
                 from push_status import notify_heartbeat
 

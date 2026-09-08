@@ -75,6 +75,7 @@ def substitute(text: str) -> str:
         "__AC_GITHUB_REPO__": settings.github_pages_repo(),
         "__AC_PAGES_URL__": settings.pages_url().rstrip("/"),
         "__AC_STATUS_EVENTS__": settings.status_event_sse(),
+        "__AC_STATUS_EVENTS_DEV__": settings.status_event_sse(dev=True),
         "__AC_124_RELEASE_URL__": settings.release_124_url(),
         "__AC_JOIN_8081__": settings.join_url(8081),
         "__AC_JOIN_8082__": settings.join_url(8082),

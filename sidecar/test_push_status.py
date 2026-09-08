@@ -127,6 +127,21 @@ class PushStatusTests(unittest.TestCase):
                 "https://ntfy.sh/ac-imkarrer-ac-practice-status/sse",
             )
 
+    def test_event_url_separates_dev_from_prod(self) -> None:
+        # Both environments share GITHUB_STATUS_REPO and differ only by path.
+        # Without the suffix they publish to one topic, so dev heartbeats make
+        # the prod page look alive and the two share one ntfy rate-limit budget.
+        env = {
+            "GITHUB_STATUS_REPO": "imkarrer/ac-practice",
+            "GITHUB_STATUS_PATH": "dev/leaderboard.json",
+            "STATUS_EVENT_URL": "",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            self.assertEqual(
+                push_status.event_url(),
+                "https://ntfy.sh/ac-imkarrer-ac-practice-status-dev",
+            )
+
     def test_event_url_explicit(self) -> None:
         with patch.dict(os.environ, {"STATUS_EVENT_URL": "https://ntfy.sh/custom-topic"}, clear=False):
             self.assertEqual(push_status.event_url(), "https://ntfy.sh/custom-topic")
