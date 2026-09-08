@@ -21,6 +21,7 @@ dejavu_fonts.pkg-path = "dejavu_fonts"
 nixfmt-rfc-style.pkg-path = "nixfmt-rfc-style"
 gh.pkg-path = "gh"
 python312Full.pkg-path = "python312Full"
+discordpy.pkg-path = "python312Packages.discordpy"
 # gum.pkg-path = "gum"
 # gum.version = "^0.14.5"
 

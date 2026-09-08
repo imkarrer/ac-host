@@ -3,6 +3,12 @@
   "manifest": {
     "schema-version": "1.14.0",
     "install": {
+      "dejavu_fonts": {
+        "pkg-path": "dejavu_fonts"
+      },
+      "discordpy": {
+        "pkg-path": "python312Packages.discordpy"
+      },
       "gh": {
         "pkg-path": "gh"
       },
@@ -35,6 +41,258 @@
     "options": {}
   },
   "packages": [
+    {
+      "attr_path": "dejavu_fonts",
+      "broken": false,
+      "derivation": "/nix/store/1hsy4mq3c1rg7dd33463ah77kbjjf57q-dejavu-fonts-2.37.drv",
+      "description": "Typeface family based on the Bitstream Vera fonts",
+      "install_id": "dejavu_fonts",
+      "license": "Unspecified free software license",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "name": "dejavu-fonts-2.37",
+      "pname": "dejavu_fonts",
+      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "rev_count": 852432,
+      "rev_date": "2025-08-27T03:49:43Z",
+      "scrape_date": "2025-08-28T03:26:00.932410Z",
+      "stabilities": [
+        "stable",
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.37",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/qzj5z84i8cb8dgj41w119zn7mc8kb6ly-dejavu-fonts-2.37"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "dejavu_fonts",
+      "broken": false,
+      "derivation": "/nix/store/8wq2hzcy2mv792cca3rf0bs0cpw0g62j-dejavu-fonts-2.37.drv",
+      "description": "Typeface family based on the Bitstream Vera fonts",
+      "install_id": "dejavu_fonts",
+      "license": "Unspecified free software license",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "name": "dejavu-fonts-2.37",
+      "pname": "dejavu_fonts",
+      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "rev_count": 852432,
+      "rev_date": "2025-08-27T03:49:43Z",
+      "scrape_date": "2025-08-28T03:34:26.101552Z",
+      "stabilities": [
+        "stable",
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.37",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/czw606wp8k96hi75gzj277z61501dnlx-dejavu-fonts-2.37"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "dejavu_fonts",
+      "broken": false,
+      "derivation": "/nix/store/aip1pg84axj3jg2y7i4wig393q4ij0rf-dejavu-fonts-2.37.drv",
+      "description": "Typeface family based on the Bitstream Vera fonts",
+      "install_id": "dejavu_fonts",
+      "license": "Unspecified free software license",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "name": "dejavu-fonts-2.37",
+      "pname": "dejavu_fonts",
+      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "rev_count": 852432,
+      "rev_date": "2025-08-27T03:49:43Z",
+      "scrape_date": "2025-08-28T03:43:52.912015Z",
+      "stabilities": [
+        "stable",
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.37",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/kbnnlp7fpl8lgr6hhly8w16vijknilad-dejavu-fonts-2.37"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "dejavu_fonts",
+      "broken": false,
+      "derivation": "/nix/store/chajanq5hxaxrb2qanyih8za8j8n64v8-dejavu-fonts-2.37.drv",
+      "description": "Typeface family based on the Bitstream Vera fonts",
+      "install_id": "dejavu_fonts",
+      "license": "Unspecified free software license",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "name": "dejavu-fonts-2.37",
+      "pname": "dejavu_fonts",
+      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "rev_count": 852432,
+      "rev_date": "2025-08-27T03:49:43Z",
+      "scrape_date": "2025-08-28T03:51:28.806072Z",
+      "stabilities": [
+        "stable",
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.37",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/jm20pdjzh3fg070nfnlw59hbyapf0l60-dejavu-fonts-2.37"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "python312Packages.discordpy",
+      "broken": false,
+      "derivation": "/nix/store/bpjaw00sk0hmbxx8mz0cjl950j0vig35-python3.12-discord.py-2.5.2.drv",
+      "description": "Python wrapper for the Discord API",
+      "install_id": "discordpy",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "name": "python3.12-discord.py-2.5.2",
+      "pname": "discordpy",
+      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "rev_count": 852432,
+      "rev_date": "2025-08-27T03:49:43Z",
+      "scrape_date": "2025-08-28T03:26:14.815450Z",
+      "stabilities": [
+        "stable",
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.5.2",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dist": "/nix/store/si828dp541f8677igmqh5zfrhvxl23h2-python3.12-discord.py-2.5.2-dist",
+        "out": "/nix/store/g2rrd7fh1gkl8c5a32qyp9bnyfvjchxc-python3.12-discord.py-2.5.2"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "python312Packages.discordpy",
+      "broken": false,
+      "derivation": "/nix/store/3dnsywx94smb710nvbjqa4p55ad447ii-python3.12-discord.py-2.5.2.drv",
+      "description": "Python wrapper for the Discord API",
+      "install_id": "discordpy",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "name": "python3.12-discord.py-2.5.2",
+      "pname": "discordpy",
+      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "rev_count": 852432,
+      "rev_date": "2025-08-27T03:49:43Z",
+      "scrape_date": "2025-08-28T03:34:57.896716Z",
+      "stabilities": [
+        "stable",
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.5.2",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dist": "/nix/store/f00qrq23ix566fayv9k9ylnmg00kw8rv-python3.12-discord.py-2.5.2-dist",
+        "out": "/nix/store/niwlmpgihy6mq1g6ms634qp4yw2dkz2q-python3.12-discord.py-2.5.2"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "python312Packages.discordpy",
+      "broken": false,
+      "derivation": "/nix/store/jxfk7q4qidj39nlinjl6j5c24k6agmgd-python3.12-discord.py-2.5.2.drv",
+      "description": "Python wrapper for the Discord API",
+      "install_id": "discordpy",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "name": "python3.12-discord.py-2.5.2",
+      "pname": "discordpy",
+      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "rev_count": 852432,
+      "rev_date": "2025-08-27T03:49:43Z",
+      "scrape_date": "2025-08-28T03:44:06.651958Z",
+      "stabilities": [
+        "stable",
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.5.2",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dist": "/nix/store/imgby879a935nq001p8x8z953bzbdrfv-python3.12-discord.py-2.5.2-dist",
+        "out": "/nix/store/iqzid1mgzjbw07xfx43vlpxk1vxg88dl-python3.12-discord.py-2.5.2"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "python312Packages.discordpy",
+      "broken": false,
+      "derivation": "/nix/store/zq4acwwh3fn69aylr17rx5h6sp9gw86j-python3.12-discord.py-2.5.2.drv",
+      "description": "Python wrapper for the Discord API",
+      "install_id": "discordpy",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "name": "python3.12-discord.py-2.5.2",
+      "pname": "discordpy",
+      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "rev_count": 852432,
+      "rev_date": "2025-08-27T03:49:43Z",
+      "scrape_date": "2025-08-28T03:51:58.512438Z",
+      "stabilities": [
+        "stable",
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.5.2",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dist": "/nix/store/xx3k00w8c48w1n5mgws1fqgv5sfgmliw-python3.12-discord.py-2.5.2-dist",
+        "out": "/nix/store/3a9li0hid1nj19l68b5ajcpibqx04hck-python3.12-discord.py-2.5.2"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
     {
       "attr_path": "gh",
       "broken": false,
