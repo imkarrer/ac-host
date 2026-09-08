@@ -1,4 +1,7 @@
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from steam_parse import parse_profile, steam64_from_xml, vanity_slug
 from players import (
@@ -9,6 +12,7 @@ from players import (
     player_public_name,
     set_livery,
 )
+import bot
 
 
 class ParseProfileTests(unittest.TestCase):
@@ -138,6 +142,33 @@ class LiveryCollisionTests(unittest.TestCase):
                 except_discord=owner["discord_id"],
             )
         )
+
+
+class LoadLeaderboardTests(unittest.TestCase):
+    def test_missing_file_returns_empty_default(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            with patch.object(bot, "LEADERBOARD_PATH", Path(raw) / "leaderboard.json"):
+                self.assertEqual(bot.load_leaderboard(), {"updated": None, "lobbies": {}})
+
+    def test_valid_file_is_read_through(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "leaderboard.json"
+            path.write_text('{"updated": "now", "lobbies": {"blackhawk": {}}}', encoding="utf-8")
+            with patch.object(bot, "LEADERBOARD_PATH", path):
+                self.assertEqual(
+                    bot.load_leaderboard(), {"updated": "now", "lobbies": {"blackhawk": {}}}
+                )
+
+    def test_corrupt_file_logs_and_degrades_instead_of_crashing(self) -> None:
+        # The bot only ever reads this file -- it must never crash a
+        # scheduled task or a snapshot command over a corrupt board the way
+        # plugin.Leaderboard (the authoritative writer) is now allowed to.
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "leaderboard.json"
+            path.write_text("{not valid json", encoding="utf-8")
+            with patch.object(bot, "LEADERBOARD_PATH", path):
+                with patch("sys.stderr"):
+                    self.assertEqual(bot.load_leaderboard(), {"updated": None, "lobbies": {}})
 
 
 if __name__ == "__main__":

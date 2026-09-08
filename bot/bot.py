@@ -24,6 +24,7 @@ for _candidate in (_HERE, _HERE.parent / "shared"):
         break
 
 from steam_parse import parse_profile, steam64_from_xml, vanity_slug
+import atomic_json
 import car_skins
 import page_mirror
 import downtime
@@ -70,6 +71,26 @@ LEADERBOARD_PATH = Path(os.environ.get("LEADERBOARD_PATH") or (WHITELIST_PATH.pa
 MIRROR_STATE_PATH = Path(os.environ.get("PAGE_MIRROR_PATH") or (WHITELIST_PATH.parent / "page_mirror.json"))
 
 
+def load_leaderboard() -> dict:
+    """Read LEADERBOARD_PATH, the same file acctl.py/plugin.py write.
+
+    The bot only ever displays this data (a page snapshot, a downtime
+    mention list) -- it never writes leaderboard.json back, so unlike
+    plugin.Leaderboard._load it must not crash the bot or a scheduled task
+    over a transient/corrupt read. But it also must not silently treat
+    "corrupt" as "empty board" the way the old json.loads(...)-with-a-
+    fallback pattern did: that's indistinguishable from a real empty board,
+    so a real corruption would show as "nobody's online" with no signal
+    anything is wrong. Log it and degrade to the same empty default instead.
+    """
+    try:
+        data = atomic_json.read_json(LEADERBOARD_PATH)
+    except atomic_json.UnreadableJSON as exc:
+        print(f"WARNING: {exc}; showing an empty leaderboard until it's repaired", file=sys.stderr)
+        return {"updated": None, "lobbies": {}}
+    return data if data is not None else {"updated": None, "lobbies": {}}
+
+
 def load_json(path: Path, default: dict) -> dict:
     if not path.is_file():
         return default
@@ -113,7 +134,7 @@ def page_snapshot() -> dict:
         cars = [display.get(folder) or folder for folder in car_skins.PRACTICE_CARS]
     return page_mirror.snapshot(
         statics=page_mirror.load_statics(STATICS_PATH),
-        board=page_mirror.load_json(LEADERBOARD_PATH, {"updated": None, "lobbies": {}}),
+        board=load_leaderboard(),
         public_ip=PUBLIC_IP or "127.0.0.1",
         pages_url=PAGES_URL,
         cars=cars,
@@ -767,7 +788,7 @@ async def fire_downtime_mark(mark: int) -> None:
         print(f"downtime mark {mark} skipped (no #server-status)")
         return
     whitelist = load_whitelist()
-    board = load_json(LEADERBOARD_PATH, {"updated": None, "lobbies": {}})
+    board = load_leaderboard()
     online = downtime.online_lines(whitelist, board)
     ids = downtime.mention_ids(whitelist, board) if mark in downtime.MENTION_MARKS else []
     text = downtime.discord_text(mark, online=online)

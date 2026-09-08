@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import atomic_json
 
 SERIES_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 DEFAULT_SERIES = {
@@ -554,7 +557,20 @@ def import_quali_laps_from_leaderboard(
     car: str,
 ) -> dict[str, int]:
     """Read official quali PBs from leaderboard.json (plugin rejects cuts)."""
-    board = load_json(state_root / "leaderboard.json", {"lobbies": {}})
+    # This only ever READS leaderboard.json -- sync_quali_laps_to_round below
+    # merges the result into round.json, keeping every existing quali_laps
+    # entry regardless of what comes back here (best lap wins, never
+    # replaces). So a corrupt board can't wipe existing quali times the way
+    # it could for leaderboard.json's own authoritative writer -- but it
+    # must not silently look identical to "no laps recorded yet" either, so
+    # warn on the way to the same empty result the old json.loads-with-
+    # fallback pattern produced.
+    try:
+        board = atomic_json.read_json(state_root / "leaderboard.json")
+    except atomic_json.UnreadableJSON as exc:
+        print(f"WARNING: {exc}; importing no quali laps this round", file=sys.stderr)
+        board = None
+    board = board if board is not None else {"lobbies": {}}
     lobby = (board.get("lobbies") or {}).get(quali_lobby_id(series_id, round_id)) or {}
     laps: dict[str, int] = {}
     for entry in lobby.get("allTime") or []:
