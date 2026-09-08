@@ -178,7 +178,12 @@ def git_changed_paths(repo: Path, since: str, until: str = "HEAD") -> list[str]:
 
 
 WIPE_BACKUP_NAME = "_local_wipe_backup"
-WIPE_BACKUP_KEEP = 5
+
+# ci_queue_prod.py also calls sync_tree (checkout -> pending-src), so one full
+# deploy cycle produces TWO snapshots rather than one. Observed on the first live
+# run: 20260908T000728Z from the queue and 20260908T001316Z from the apply. Keep
+# 10 so that is five cycles of history instead of two and a half.
+WIPE_BACKUP_KEEP = 10
 
 
 def wipe_backup_root(dest: Path) -> Path:
