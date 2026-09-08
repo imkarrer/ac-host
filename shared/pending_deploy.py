@@ -177,20 +177,83 @@ def git_changed_paths(repo: Path, since: str, until: str = "HEAD") -> list[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def sync_tree(src: Path, dest: Path) -> None:
-    """Replace dest with src, skipping caches and secrets."""
+WIPE_BACKUP_NAME = "_local_wipe_backup"
+WIPE_BACKUP_KEEP = 5
+
+
+def wipe_backup_root(dest: Path) -> Path:
+    """Where pre-sync snapshots live: a sibling of the synced tree.
+
+    Derived from `dest` rather than from state_dir(), so it follows whatever tree
+    is actually being synced and needs no plumbing through callers. In production
+    dest is <state>/src, which puts snapshots at <state>/_local_wipe_backup.
+
+    Deliberately a sibling, never inside dest: rsync would otherwise recurse into
+    its own backups. `_local_wipe_backup/` has been in RSYNC_EXCLUDES since long
+    before this function existed, implying a backup mechanism that was never
+    actually written -- sync_tree had no backup or rollback of any kind.
+    """
+    return dest.parent / WIPE_BACKUP_NAME
+
+
+def prune_wipe_backups(dest: Path, keep: int = WIPE_BACKUP_KEEP) -> list[Path]:
+    """Keep the newest `keep` snapshots. Returns what was removed."""
+    root = wipe_backup_root(dest)
+    if not root.is_dir():
+        return []
+    snaps = sorted((p for p in root.iterdir() if p.is_dir()), reverse=True)
+    removed = []
+    for old in snaps[keep:]:
+        shutil.rmtree(old, ignore_errors=True)
+        removed.append(old)
+    return removed
+
+
+def sync_tree(src: Path, dest: Path) -> Path | None:
+    """Replace dest with src, skipping caches and secrets.
+
+    Anything this would delete or overwrite is moved into a timestamped snapshot
+    first, via rsync's own --backup/--backup-dir, so a sync is recoverable
+    instead of destructive. Returns the snapshot directory, or None if rsync was
+    unavailable (in which case nothing was changed).
+
+    Why this exists: dry-running the first ever sync against the live tree found
+    five separate categories of machine-local state it would have destroyed --
+    the hardware config, the authorized keys, the dist/ car zips, the CI
+    credentials file, and 452 MB of _extract/ packaging intermediates. Each was
+    fixed with an exclude once found. A snapshot makes the next one a recovery
+    rather than a loss, because the list of things nobody thought to exclude is
+    never knowably empty.
+    """
     if not src.is_dir():
         raise FileNotFoundError(f"sync source missing: {src}")
     dest.parent.mkdir(parents=True, exist_ok=True)
     rsync = shutil.which("rsync")
     if rsync:
         dest.mkdir(parents=True, exist_ok=True)
-        cmd = [rsync, "-a", "--delete"]
+        # utcnow() is second-resolution, and two syncs inside one second would
+        # otherwise share a snapshot directory -- which breaks both the
+        # one-snapshot-per-sync model and the empty-snapshot cleanup below.
+        # Caught by running two syncs back to back in a test.
+        stamp = utcnow().replace(":", "").replace("-", "")
+        root = wipe_backup_root(dest)
+        snapshot = root / stamp
+        suffix = 1
+        while snapshot.exists():
+            snapshot = root / f"{stamp}.{suffix}"
+            suffix += 1
+        snapshot.mkdir(parents=True)
+        cmd = [rsync, "-a", "--delete", "--backup", f"--backup-dir={snapshot}"]
         for pattern in RSYNC_EXCLUDES:
             cmd.extend(["--exclude", pattern])
         cmd.extend([str(src) + "/", str(dest) + "/"])
         subprocess.run(cmd, check=True)
-        return
+        # An empty snapshot means the sync changed nothing; do not leave litter.
+        if not any(snapshot.iterdir()):
+            snapshot.rmdir()
+            snapshot = None
+        prune_wipe_backups(dest)
+        return snapshot
     # No rsync: refuse rather than destroy. This fallback rmtree()s dest before
     # copying, so ignore_patterns cannot protect PRESERVE_LOCAL -- those files
     # are already deleted by the time copytree decides what to skip. Preserving

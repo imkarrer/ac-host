@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -97,6 +98,102 @@ class BuildkiteTriggerTests(unittest.TestCase):
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = value
+
+
+class WipeBackupTests(unittest.TestCase):
+    """sync_tree must be recoverable, not merely careful.
+
+    Dry-running the first ever sync found five separate categories of
+    machine-local state it would have destroyed. Each got an exclude once known.
+    The snapshot exists because the list of things nobody thought to exclude is
+    never knowably empty.
+    """
+
+    @unittest.skipIf(shutil.which("rsync") is None, "needs rsync")
+    def test_deleted_and_overwritten_files_land_in_the_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            state, src, dest = root / "state", root / "pending-src", root / "src"
+            src.mkdir()
+            dest.mkdir()
+            (src / "a.txt").write_text("new")
+            # Different size AND an older mtime on purpose: rsync's quick-check
+            # is size+mtime, so same-size files written in the same second are
+            # skipped entirely and never backed up. An earlier version of this
+            # test silently proved nothing for that reason.
+            (dest / "a.txt").write_text("old, and longer")
+            os.utime(dest / "a.txt", (1_000_000, 1_000_000))
+            (dest / "gone.txt").write_text("precious")
+
+            snapshot = pending_deploy.sync_tree(src, dest)
+
+            self.assertIsNotNone(snapshot)
+            self.assertEqual((snapshot / "gone.txt").read_text(), "precious")
+            self.assertEqual((snapshot / "a.txt").read_text(), "old, and longer")
+            self.assertEqual((dest / "a.txt").read_text(), "new")
+            self.assertFalse((dest / "gone.txt").exists())
+
+    @unittest.skipIf(shutil.which("rsync") is None, "needs rsync")
+    def test_two_syncs_in_one_second_get_separate_snapshots(self) -> None:
+        # utcnow() is second-resolution; without a uniquifying suffix the second
+        # sync reused the first snapshot directory, which also defeated the
+        # empty-snapshot cleanup.
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            state, src, dest = root / "state", root / "pending-src", root / "src"
+            src.mkdir()
+            dest.mkdir()
+            (src / "a.txt").write_text("x")
+            (dest / "doomed.txt").write_text("first")
+
+            first = pending_deploy.sync_tree(src, dest)
+            (dest / "doomed2.txt").write_text("second")
+            second = pending_deploy.sync_tree(src, dest)
+
+            self.assertIsNotNone(first)
+            self.assertIsNotNone(second)
+            self.assertNotEqual(first, second)
+            self.assertEqual((first / "doomed.txt").read_text(), "first")
+            self.assertEqual((second / "doomed2.txt").read_text(), "second")
+
+    @unittest.skipIf(shutil.which("rsync") is None, "needs rsync")
+    def test_a_sync_that_changes_nothing_leaves_no_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            state, src, dest = root / "state", root / "pending-src", root / "src"
+            src.mkdir()
+            dest.mkdir()
+            (src / "a.txt").write_text("same")
+            pending_deploy.sync_tree(src, dest)
+
+            self.assertIsNone(pending_deploy.sync_tree(src, dest))
+
+    def test_prune_keeps_the_newest_snapshots(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            dest = Path(raw) / "src"
+            backups = pending_deploy.wipe_backup_root(dest)
+            for day in range(8):
+                (backups / f"2026010{day}T000000Z").mkdir(parents=True)
+
+            removed = pending_deploy.prune_wipe_backups(dest, keep=5)
+
+            kept = sorted(p.name for p in backups.iterdir())
+            self.assertEqual(len(kept), 5)
+            self.assertEqual(len(removed), 3)
+            self.assertIn("20260107T000000Z", kept)
+            self.assertNotIn("20260100T000000Z", kept)
+
+    def test_backup_root_sits_outside_the_synced_tree(self) -> None:
+        # If snapshots lived inside dest, rsync would recurse into its own
+        # backups. _local_wipe_backup/ is in RSYNC_EXCLUDES for that reason, but
+        # keeping them out of the tree entirely is the stronger guarantee.
+        state = Path("/var/lib/ac-host")
+        self.assertEqual(
+            pending_deploy.wipe_backup_root(state / "src"), state / "_local_wipe_backup"
+        )
+        self.assertFalse(
+            str(pending_deploy.wipe_backup_root(state / "src")).startswith(str(state / "src"))
+        )
 
 
 if __name__ == "__main__":
