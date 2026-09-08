@@ -164,9 +164,16 @@ Keyboard and monitor attached **before** you start. This is the step most likely
 
 Apply plan §1 and §2. **Delete the Step 6 block in the same commit** — do not layer networkd on top of it. With `useNetworkd = true`, `networking.interfaces` generates its own `.network` unit, so leaving those lines gives you two units matching one interface, resolved by filename order.
 
+> **This repo no longer builds ac-box.** Its `nixosConfigurations.ac-box` is
+> gone: a rebuild from it produced a system with no platform layer, no tenant
+> contract and the old *global* firewall rules, reverting the refactor silently
+> and without an error. The host is built by `github:imkarrer/homelab`, and the
+> network changes this runbook describes now belong in
+> `homelab/modules/platform/network.nix` plus `hosts/ac-box/host.nix`, which is
+> already where the NIC names and addresses live.
+
 ```bash
-cd /var/lib/ac-host/src
-nixos-rebuild boot --flake .#ac-box    # activates nothing; safe to run remotely
+nixos-rebuild boot --flake github:imkarrer/homelab#ac-box   # activates nothing; safe remotely
 reboot
 ```
 
