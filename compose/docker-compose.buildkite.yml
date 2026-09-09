@@ -109,6 +109,13 @@ services:
       AC_SERVE_CONTENT: /var/lib/ac-host/content
       AC_PAGES_CHECKOUT: ${AC_PAGES_CHECKOUT:-}
       AC_PAGES_PUSH: ${AC_PAGES_PUSH:-0}
+      # ci_publish_pages.py publishes the site through the Contents API when
+      # AC_PAGES_CHECKOUT is empty, using the same credential and repo
+      # push_status.py already writes leaderboard.json with. That avoids a
+      # long-lived clone on the box, which is state nothing reconciles.
+      GITHUB_STATUS_TOKEN: ${GITHUB_STATUS_TOKEN:-}
+      GITHUB_STATUS_REPO: ${GITHUB_STATUS_REPO:-}
+      GITHUB_STATUS_BRANCH: ${GITHUB_STATUS_BRANCH:-main}
       AWS_ACCESS_KEY_ID: ${S3_CACHE_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${S3_CACHE_SECRET_ACCESS_KEY}
       AWS_EC2_METADATA_DISABLED: "true"
