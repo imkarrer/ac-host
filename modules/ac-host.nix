@@ -201,6 +201,66 @@ in
 
     # 03:00 America/Chicago recycle so the 24h practice TIME never lands on busy hours.
     # Persistent=false: if the box was off at 3am, skip — boot already starts lobbies.
+    # The Discord bot's unit. Until 12 Sep 2026 the bot had none: Docker's
+    # `restart: unless-stopped` brought it up at boot and ci_downtime.py ran
+    # `compose --profile bot up -d --build bot` nightly. Two owners, neither
+    # systemd -- so the unit-based blast-radius gate (switch-to-configuration
+    # dry-activate) could not see it, the same gap homelab's bead .14 named
+    # for the dev stack. This is that owner, and homelab's tenant declaration
+    # for `bot` names it in `units`.
+    #
+    # Same compose project, same service, same env file as ci_downtime's
+    # nightly rebuild -- deliberately, so the two agree. `docker compose up`
+    # against a container whose definition has not changed is a no-op, and
+    # against one that has, a recreate; either way there is one container
+    # named ac-host-bot-1, never two, and the nightly --build keeps doing the
+    # image work this unit does not.
+    #
+    # After ac-host-static, not because the bot needs the lobbies but because
+    # both run `docker compose` in the ac-host project and compose takes a
+    # project lock; serialising them avoids a start-time race for it. Not
+    # `requires`: the bot must come up even if a lobby fails to.
+    #
+    # restartIfChanged = false, like every unit in this file that fronts a
+    # container: the bot is what queues the 03:00 DOWNTIME=1 build, and a
+    # nixos-rebuild at 02:58 must not take it down for the countdown.
+    systemd.services.ac-host-bot = {
+      description = "Assetto Corsa Discord bot (whitelist, status page, 03:00 downtime countdown)";
+      after = [ "docker.service" "network-online.target" "ac-host-static.service" ];
+      wants = [ "network-online.target" ];
+      requires = [ "docker.service" ];
+      wantedBy = [ "multi-user.target" ];
+      path = [
+        pkgs.docker
+        pkgs.docker-compose
+        pkgs.coreutils
+      ];
+      unitConfig = {
+        # No .env, no token, no bot. Same guard ci_downtime.py applies before
+        # its rebuild ("compose or .env missing"), expressed as a condition so
+        # a missing file reads as "skipped" in systemctl, not "failed".
+        ConditionPathExists = "${cfg.stateDir}/.env";
+      };
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        TimeoutStartSec = "5min";
+        WorkingDirectory = "${cfg.repoDir}/compose";
+        Environment = [
+          "AC_STATE=${cfg.stateDir}"
+          "AC_CONTENT=${cfg.stateDir}/content"
+          "AC_BUILD=${cfg.buildDir}"
+          "COMPOSE_PROJECT_NAME=ac-host"
+        ];
+        ExecStart = "${pkgs.docker-compose}/bin/docker-compose -f ${cfg.repoDir}/compose/docker-compose.yml --env-file ${cfg.stateDir}/.env --profile bot up -d bot";
+        # `stop`, not `down`: down would remove the container and, with the
+        # wrong flag, the ac-host project's network that the sidecars share.
+        ExecStop = "${pkgs.docker-compose}/bin/docker-compose -f ${cfg.repoDir}/compose/docker-compose.yml --env-file ${cfg.stateDir}/.env --profile bot stop bot";
+      };
+      restartIfChanged = false;
+      stopIfChanged = false;
+    };
+
     systemd.services.ac-host-nightly = {
       description = "Assetto Corsa 03:00 practice lobby recycle";
       after = [ "docker.service" "ac-host-static.service" ];
