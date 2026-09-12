@@ -129,6 +129,25 @@ services:
       S3_CACHE_SIGNING_KEY: ${S3_CACHE_SIGNING_KEY:?set S3_CACHE_SIGNING_KEY}
     volumes:
       - /var/lib/ac-host:/var/lib/ac-host
+      # The platform's deploy state, NOT this tenant's. homelab's Buildkite
+      # pipeline stages the system-closure revision it has just proven green
+      # into /var/lib/homelab/pending-closure.json, and a systemd unit on the
+      # box (homelab's modules/deploy) applies it inside the maintenance
+      # window. That pipeline runs on THIS agent, so the agent needs the path.
+      #
+      # Mounted separately rather than staged under /var/lib/ac-host, which
+      # is already mounted and would have been easier: that directory is the
+      # racing tenant's state, and the closure's deploy record is a platform
+      # fact. Borrowing a tenant's state directory for a platform record is
+      # the coupling homelab exists to undo (ADR 0006 in that repo says so
+      # in as many words). Docker creates the host directory if it is absent.
+      #
+      # Recreating the agent container is what makes this take effect --
+      # `docker compose up -d` does that on a changed definition. Under
+      # systemd that is `ac-host-ci.service` starting: a reboot, or a
+      # deliberate restart from a plain SSH session. Never from a Buildkite
+      # step (HAZARD 2 in homelab's modules/ci).
+      - /var/lib/homelab:/var/lib/homelab
       - /var/run/docker.sock:/var/run/docker.sock
       - buildkite-builds:/buildkite/builds
       - buildkite-nix:/nix
