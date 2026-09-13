@@ -1,8 +1,13 @@
+import asyncio
+import io
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
+import buildkite_trigger
 from steam_parse import parse_profile, steam64_from_xml, vanity_slug
 from players import (
     NOT_BOT_REGISTERED,
@@ -169,6 +174,197 @@ class LoadLeaderboardTests(unittest.TestCase):
             with patch.object(bot, "LEADERBOARD_PATH", path):
                 with patch("sys.stderr"):
                     self.assertEqual(bot.load_leaderboard(), {"updated": None, "lobbies": {}})
+
+
+class FakeStatusChannel:
+    """Records what the bot would have posted to #server-status."""
+
+    def __init__(self) -> None:
+        self.sent: list[str] = []
+
+    async def send(self, content: str, **_kwargs) -> None:
+        self.sent.append(content)
+
+
+def _http_error(code: int, body: str) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError(
+        "https://api.buildkite.com/v2/access-token", code, "err", {}, io.BytesIO(body.encode("utf-8"))
+    )
+
+
+class BuildkiteTokenCheckTests(unittest.TestCase):
+    # Night of 12 Sep 2026 the token in /var/lib/ac-host/.env was dead and
+    # nobody learned it until the 03:00 trigger got its 401 in docker logs.
+    # check_token asks Buildkite at startup instead. No network: the opener
+    # is injected.
+
+    def test_live_token_reports_scopes(self) -> None:
+        seen: dict = {}
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_exc):
+                return False
+
+            def read(self):
+                return b'{"uuid": "u", "scopes": ["read_builds", "write_builds"]}'
+
+        def opener(request, timeout):
+            seen["url"] = request.full_url
+            seen["auth"] = request.get_header("Authorization")
+            return Response()
+
+        ok, detail = buildkite_trigger.check_token(token="bkua_secret", opener=opener)
+        self.assertTrue(ok)
+        self.assertEqual(seen["url"], "https://api.buildkite.com/v2/access-token")
+        self.assertEqual(seen["auth"], "Bearer bkua_secret")
+        self.assertIn("write_builds", detail)
+        self.assertNotIn("bkua_secret", detail)
+
+    def test_401_is_a_verdict_not_an_exception(self) -> None:
+        def opener(request, timeout):
+            raise _http_error(401, '{"message": "Authorization failed"}')
+
+        ok, detail = buildkite_trigger.check_token(token="bkua_dead", opener=opener)
+        self.assertFalse(ok)
+        self.assertIn("HTTP 401", detail)
+        self.assertIn("Authorization failed", detail)
+        self.assertNotIn("bkua_dead", detail)
+
+    def test_network_failure_is_a_verdict_not_an_exception(self) -> None:
+        def opener(request, timeout):
+            raise urllib.error.URLError("no route to host")
+
+        ok, detail = buildkite_trigger.check_token(token="bkua_x", opener=opener)
+        self.assertFalse(ok)
+        self.assertIn("no route to host", detail)
+
+    def test_missing_token_is_bad(self) -> None:
+        ok, detail = buildkite_trigger.check_token(token="", opener=lambda *a, **k: self.fail("no request"))
+        self.assertFalse(ok)
+        self.assertIn("BUILDKITE_API_TOKEN", detail)
+
+
+class StartupTokenVerdictTests(unittest.TestCase):
+    def setUp(self) -> None:
+        bot.bot._buildkite_token_posted = False
+
+    def _run(self, stub) -> FakeStatusChannel:
+        channel = FakeStatusChannel()
+
+        async def status_channel():
+            return channel
+
+        with patch.object(bot, "buildkite_trigger", stub), patch.object(
+            bot, "status_text_channel", status_channel
+        ), patch("builtins.print"):
+            asyncio.run(bot.report_buildkite_token())
+        return channel
+
+    def test_bad_token_is_posted_once_naming_the_fix(self) -> None:
+        stub = SimpleNamespace(
+            configured=lambda: True,
+            check_token=lambda: (False, "GET /v2/access-token HTTP 401: Authorization failed"),
+        )
+        channel = self._run(stub)
+        self.assertEqual(len(channel.sent), 1)
+        self.assertIn("FAILED", channel.sent[0])
+        self.assertIn("HTTP 401", channel.sent[0])
+        self.assertIn("BUILDKITE_API_TOKEN in /var/lib/ac-host/.env", channel.sent[0])
+        self.assertIn("ac-host-bot.service", channel.sent[0])
+        # on_ready fires again on every reconnect; the token does not change
+        # until the process restarts, so the channel hears it once.
+        again = self._run(stub)
+        self.assertEqual(again.sent, [])
+
+    def test_good_token_posts_nothing(self) -> None:
+        stub = SimpleNamespace(configured=lambda: True, check_token=lambda: (True, "scopes write_builds"))
+        self.assertEqual(self._run(stub).sent, [])
+
+    def test_unconfigured_buildkite_posts_nothing(self) -> None:
+        stub = SimpleNamespace(configured=lambda: False, check_token=lambda: self.fail("no check"))
+        self.assertEqual(self._run(stub).sent, [])
+
+
+class DowntimeTriggerFailureTests(unittest.TestCase):
+    def setUp(self) -> None:
+        bot.bot._drill_at = None
+        bot.bot._downtime_pipeline_date = None
+
+    def _stub(self, trigger):
+        return SimpleNamespace(
+            configured=lambda: True,
+            pipeline_slug=lambda kind="ci": "ac-host-ops" if kind == "ops" else "ac-host",
+            trigger_downtime=trigger,
+        )
+
+    def test_trigger_exception_becomes_operator_text(self) -> None:
+        def trigger():
+            raise RuntimeError('Buildkite trigger failed HTTP 401: {"message":"Authorization failed"}')
+
+        with patch.object(bot, "buildkite_trigger", self._stub(trigger)), patch("builtins.print"):
+            text = bot._queue_downtime_pipeline()
+        assert text is not None
+        self.assertIn("NOT queued", text)
+        self.assertIn("HTTP 401", text)
+        self.assertIn("pipeline ac-host-ops", text)
+        self.assertIn("rotate BUILDKITE_API_TOKEN in /var/lib/ac-host/.env", text)
+        # Not marked queued: the build did not happen.
+        self.assertIsNone(bot.bot._downtime_pipeline_date)
+
+    def test_non_auth_failure_points_at_the_logs_first(self) -> None:
+        def trigger():
+            raise RuntimeError("Buildkite trigger failed HTTP 503: upstream")
+
+        with patch.object(bot, "buildkite_trigger", self._stub(trigger)), patch("builtins.print"):
+            text = bot._queue_downtime_pipeline()
+        assert text is not None
+        self.assertIn("HTTP 503", text)
+        self.assertIn("journalctl -u ac-host-bot.service", text)
+
+    def test_queued_build_returns_nothing_to_post(self) -> None:
+        stub = self._stub(lambda: {"web_url": "https://buildkite.com/b/1"})
+        with patch.object(bot, "buildkite_trigger", stub), patch("builtins.print"):
+            self.assertIsNone(bot._queue_downtime_pipeline())
+        self.assertIsNotNone(bot.bot._downtime_pipeline_date)
+
+    def test_mark_zero_posts_the_failure_to_status_channel(self) -> None:
+        channel = FakeStatusChannel()
+
+        async def status_channel():
+            return channel
+
+        failure = bot.downtime_failure_text("Buildkite trigger failed HTTP 401: nope", "ac-host-ops")
+        with patch.object(bot, "status_text_channel", status_channel), patch.object(
+            bot, "_queue_downtime_pipeline", lambda: failure
+        ), patch.object(bot, "load_whitelist", lambda: {"players": []}), patch.object(
+            bot, "load_leaderboard", lambda: {"updated": None, "lobbies": {}}
+        ), patch("builtins.print"):
+            asyncio.run(bot.fire_downtime_mark(0))
+        self.assertEqual(channel.sent[0], failure)
+        # The mark-0 countdown line still goes out after it.
+        self.assertEqual(len(channel.sent), 2)
+
+    def test_drill_at_mark_zero_never_posts_a_failure(self) -> None:
+        channel = FakeStatusChannel()
+
+        async def status_channel():
+            return channel
+
+        bot.bot._drill_at = bot.downtime.now_local()
+        try:
+            with patch.object(bot, "status_text_channel", status_channel), patch.object(
+                bot, "_queue_downtime_pipeline", lambda: self.fail("drill must not trigger")
+            ), patch.object(bot, "load_whitelist", lambda: {"players": []}), patch.object(
+                bot, "load_leaderboard", lambda: {"updated": None, "lobbies": {}}
+            ), patch("builtins.print"):
+                asyncio.run(bot.fire_downtime_mark(0))
+        finally:
+            bot.bot._drill_at = None
+        self.assertEqual(len(channel.sent), 1)
+        self.assertNotIn("NOT queued", channel.sent[0])
 
 
 if __name__ == "__main__":

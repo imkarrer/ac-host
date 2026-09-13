@@ -657,6 +657,7 @@ class LobbyBot(commands.Bot):
         self._countdown_msg: discord.Message | None = None
         self._drill_at: datetime | None = None
         self._downtime_pipeline_date: str | None = None
+        self._buildkite_token_posted = False
 
     async def setup_hook(self) -> None:
         self.add_view(PersistentReviewView())
@@ -757,36 +758,102 @@ def downtime_remaining() -> float | None:
     return downtime.seconds_until_restart()
 
 
-def _queue_downtime_pipeline() -> None:
-    """Real 03:00 only. Drill and a second hit the same Chicago day are no-ops."""
+BUILDKITE_ENV_HINT = (
+    "rotate BUILDKITE_API_TOKEN in /var/lib/ac-host/.env and restart ac-host-bot.service."
+)
+
+
+def _buildkite_hint(detail: str) -> str:
+    """401/403 is a dead token, which only the human can fix; anything else
+    (network, 5xx, a renamed pipeline) wants the logs first."""
+    if "HTTP 401" in detail or "HTTP 403" in detail:
+        return BUILDKITE_ENV_HINT
+    return "check `journalctl -u ac-host-bot.service`; if it is the token, " + BUILDKITE_ENV_HINT
+
+
+def downtime_failure_text(detail: str, pipeline: str) -> str:
+    """What #server-status sees when mark 0 could not queue the build."""
+    return (
+        f"03:00 DOWNTIME build was NOT queued: {detail[:300]} (pipeline {pipeline}). "
+        f"The tenant tree will not apply tonight; {_buildkite_hint(detail)}"
+    )
+
+
+def buildkite_token_failure_text(detail: str) -> str:
+    """What #server-status sees at startup when the token is already dead."""
+    return (
+        f"Buildkite token check FAILED at bot startup: {detail[:300]}. "
+        f"The 03:00 DOWNTIME build will not queue until it is fixed; {_buildkite_hint(detail)}"
+    )
+
+
+def _queue_downtime_pipeline() -> str | None:
+    """Real 03:00 only. Drill and a second hit the same Chicago day are no-ops.
+
+    Returns the operator-facing failure text when the build could not be
+    queued, None otherwise. This runs in an executor thread, so it cannot
+    post to Discord itself; fire_downtime_mark does that with the result.
+    Night of 12 Sep 2026 the 401 here went only to docker logs and the old
+    tree was recycled while pending-deploy.json still held the new one.
+    """
     if bot._drill_at is not None:
-        return
+        return None
     today = downtime.now_local().date().isoformat()
     if bot._downtime_pipeline_date == today:
         print(f"downtime pipeline already queued {today}")
-        return
+        return None
     if buildkite_trigger is None or not buildkite_trigger.configured():
         print("downtime pipeline skipped: Buildkite not configured")
-        return
+        return None
+    pipeline = buildkite_trigger.pipeline_slug("ops")
     try:
         build = buildkite_trigger.trigger_downtime()
     except Exception as exc:
         print(f"downtime pipeline trigger failed: {exc}")
-        return
+        return downtime_failure_text(str(exc), pipeline)
     if not build:
         print("downtime pipeline skipped: Buildkite not configured")
-        return
+        return None
     bot._downtime_pipeline_date = today
     print(f"downtime pipeline {build.get('web_url') or 'queued'}")
+    return None
+
+
+async def report_buildkite_token() -> None:
+    """Startup verdict on BUILDKITE_API_TOKEN: printed always, posted to
+    #server-status once per process when bad -- at 20:51 when the bot comes
+    up, not at 03:00 when the trigger needs it."""
+    if buildkite_trigger is None or not buildkite_trigger.configured():
+        print("buildkite token check skipped: Buildkite not configured")
+        return
+    ok, detail = await asyncio.get_event_loop().run_in_executor(None, buildkite_trigger.check_token)
+    print(f"buildkite token {'ok' if ok else 'BAD'}: {detail}")
+    if ok or bot._buildkite_token_posted:
+        return
+    channel = await status_text_channel()
+    if channel is None:
+        print("buildkite token verdict not posted (no #server-status)")
+        return
+    try:
+        await channel.send(buildkite_token_failure_text(detail))
+        bot._buildkite_token_posted = True
+    except discord.HTTPException as exc:
+        print(f"buildkite token verdict post failed: {exc}")
 
 
 async def fire_downtime_mark(mark: int) -> None:
+    failure: str | None = None
     if downtime.should_trigger_pipeline(mark, drill=bot._drill_at is not None):
-        await asyncio.get_event_loop().run_in_executor(None, _queue_downtime_pipeline)
+        failure = await asyncio.get_event_loop().run_in_executor(None, _queue_downtime_pipeline)
     channel = await status_text_channel()
     if channel is None:
         print(f"downtime mark {mark} skipped (no #server-status)")
         return
+    if failure:
+        try:
+            await channel.send(failure)
+        except discord.HTTPException as exc:
+            print(f"downtime failure post failed mark={mark}: {exc}")
     whitelist = load_whitelist()
     board = load_leaderboard()
     online = downtime.online_lines(whitelist, board)
@@ -836,6 +903,7 @@ async def on_ready() -> None:
     print(f"bot ready as {bot.user} guilds={len(bot.guilds)} review_channel={REVIEW_CHANNEL_ID}")
     print(f"content={CONTENT_PATH} cars={len(car_skins.list_practice_cars(CONTENT_PATH, CATALOG_PATH))}")
     print(f"page mirror channel={STATUS_CHANNEL_ID} ip={PUBLIC_IP or '(unset)'} pages={PAGES_URL}")
+    await report_buildkite_token()
     await sync_guild_commands()
     if STATUS_CHANNEL_ID and PUBLIC_IP and not refresh_page_mirror.is_running():
         refresh_page_mirror.start()

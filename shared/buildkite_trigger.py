@@ -13,7 +13,7 @@ import json
 import os
 import urllib.error
 import urllib.request
-from typing import Any
+from typing import Any, Callable
 
 
 def pipeline_slug(kind: str = "ci") -> str:
@@ -85,6 +85,41 @@ def trigger(
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:400]
         raise RuntimeError(f"Buildkite trigger failed HTTP {exc.code}: {detail}") from exc
+
+
+def check_token(
+    *,
+    token: str | None = None,
+    timeout: float = 10,
+    opener: Callable[..., Any] = urllib.request.urlopen,
+) -> tuple[bool, str]:
+    """Ask Buildkite whether the bearer token is alive: (ok, detail).
+
+    GET /v2/access-token describes the token that made the request, so a 401
+    here is the same 401 the 03:00 trigger would get -- and this runs at bot
+    startup, when someone is still awake. Never raises; the detail never
+    contains the token itself. ``opener`` is urlopen, injectable for tests.
+    """
+    token = (token if token is not None else os.environ.get("BUILDKITE_API_TOKEN", "")).strip()
+    if not token:
+        return False, "BUILDKITE_API_TOKEN is not set"
+    request = urllib.request.Request(
+        "https://api.buildkite.com/v2/access-token",
+        method="GET",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    try:
+        with opener(request, timeout=timeout) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:200].strip()
+        return False, f"GET /v2/access-token HTTP {exc.code}: {detail or exc.reason}"
+    except Exception as exc:  # URLError, timeout, bad JSON -- all "not proven alive"
+        return False, f"GET /v2/access-token failed: {exc}"
+    scopes = body.get("scopes") if isinstance(body, dict) else None
+    if not isinstance(scopes, list):
+        return False, "GET /v2/access-token returned no scopes"
+    return True, "scopes " + ",".join(str(scope) for scope in scopes)
 
 
 def trigger_downtime() -> dict[str, Any] | None:
