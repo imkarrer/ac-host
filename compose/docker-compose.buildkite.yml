@@ -116,6 +116,12 @@ services:
       GITHUB_STATUS_TOKEN: ${GITHUB_STATUS_TOKEN:-}
       GITHUB_STATUS_REPO: ${GITHUB_STATUS_REPO:-}
       GITHUB_STATUS_BRANCH: ${GITHUB_STATUS_BRANCH:-main}
+      # homelab's bump-lock step (scripts/hub-bump-lock.sh there) pushes a
+      # flake.lock bump to imkarrer/homelab when a tenant build goes green.
+      # A separate credential from GITHUB_STATUS_TOKEN on purpose: that one
+      # is scoped to the pages repo, this one to homelab, and neither should
+      # be able to do the other's job. Empty means the step skips, loudly.
+      HOMELAB_PUSH_TOKEN: ${HOMELAB_PUSH_TOKEN:-}
       AWS_ACCESS_KEY_ID: ${S3_CACHE_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${S3_CACHE_SECRET_ACCESS_KEY}
       AWS_EC2_METADATA_DISABLED: "true"

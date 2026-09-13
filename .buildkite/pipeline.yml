@@ -45,3 +45,33 @@ steps:
     plugins:
       - imkarrer/flox#main:
           command: python3 scripts/ci_publish_pages.py
+
+  # Tell homelab this tree moved. homelab's bump-lock step moves the
+  # `ac-host` input in its flake.lock, gates the result and pushes it, so a
+  # change to modules/ac-host.nix reaches the box through homelab's closure
+  # path (queue-closure -> homelab-deploy.timer at 03:30) instead of waiting
+  # for someone to run `nix flake update` by hand. Part III row 24 in
+  # homelab/docs/architecture.md.
+  #
+  # Behind `wait: ~` like queue-prod, for the same reason: a red gate must
+  # not become a lock bump. async, because this build has no reason to wait
+  # for homelab's; the bump either lands (and gets its own build there) or
+  # skips with a message when HOMELAB_PUSH_TOKEN is unset on the agent.
+  #
+  # The tenant TREE (scripts, compose, content) still deploys the way it
+  # always has -- queue-prod above, applied by the 03:00 DOWNTIME=1 build.
+  # This step is about the flake input only.
+  - trigger: homelab
+    label: ":arrow_up: bump homelab's lock"
+    if: build.branch == "main"
+    async: true
+    # A trigger that cannot fire (slug renamed, permission missing) must not
+    # redden THIS build -- queue-prod shares it, and a red build stalls the
+    # tenant deploy. The bump simply does not happen, and hub-status shows
+    # the lock behind its tip.
+    soft_fail: true
+    build:
+      message: "ac-host ${BUILDKITE_COMMIT} went green"
+      env:
+        HOMELAB_BUMP_INPUT: ac-host
+        HOMELAB_BUMP_REV: "${BUILDKITE_COMMIT}"
