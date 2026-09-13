@@ -30,6 +30,7 @@ Runs anywhere python3 is; stdlib only. Also usable by a human:
 
 from __future__ import annotations
 
+import http.client
 import json
 import socket
 import sys
@@ -73,7 +74,20 @@ def main() -> int:
         port = DETAILS_START + slot
         try:
             n = clients_on(port)
-        except (urllib.error.URLError, socket.timeout, ValueError, json.JSONDecodeError, OSError) as exc:
+        except (
+            urllib.error.URLError,
+            # Listening, accepted the connection, then answered something that
+            # is not HTTP (BadStatusLine) or cut the body short (IncompleteRead).
+            # urlopen raises these bare, not wrapped in URLError; without this
+            # entry the traceback exited 1, which the deploy unit reads as NOT
+            # busy -- fail-open on exactly the "listening but broken" case the
+            # docstring promises fails closed.
+            http.client.HTTPException,
+            socket.timeout,
+            ValueError,
+            json.JSONDecodeError,
+            OSError,
+        ) as exc:
             print(f"busy: lobby on {port} did not answer cleanly ({exc}); failing closed", file=sys.stderr)
             return 0
         if n is None:
