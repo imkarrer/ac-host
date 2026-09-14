@@ -43,6 +43,63 @@
 # old placement until recreated, and recreating the agent kills the process that
 # deploys this box -- so adopt this from a plain SSH session, never through a
 # pipeline step running on the agent itself.
+#
+# NIX SANDBOX (security_opt + NIX_CONFIG on the agent, below)
+#
+# Nix's Linux defaults are sandbox = true AND sandbox-fallback = true, and the
+# fallback is the bug: under Docker's default seccomp profile a clone() with
+# any CLONE_NEW* flag is denied unless the container has CAP_SYS_ADMIN, so
+# Nix's namespace probe fails and Nix silently (debug level) builds without a
+# sandbox -- as root, on this container's real filesystem, with
+# HOME=/homeless-shelter. ac-host's own pipeline never noticed because it
+# evaluates without building. homelab's flake check builds the whole ac-box
+# toplevel, and the first ones ever (14 Sep 2026, builds 2 and 3) hit a Go
+# program in the closure that no cache had (sops-install-secrets): Go 1.25's
+# telemetry created /homeless-shelter/.config/go/telemetry, and Nix refuses
+# every later unsandboxed build while that directory exists. Cleared by hand,
+# build 3 recreated it in 28 s.
+#
+# Two settings, and both are needed:
+#
+#   security_opt seccomp=unconfined lets clone/unshare/mount/pivot_root
+#   through. That is everything the sandbox needs: Nix builds inside its own
+#   user namespace (the builder is uid 1000 there, mapped onto this
+#   container's root), so no capability is added. Checked in a container,
+#   Nix 2.35, Docker 29, kernel 6.18, with sandbox-fallback = false so a
+#   sandbox that did not engage was an error rather than a quiet build:
+#     default                        -> "this system does not support the
+#                                       kernel namespaces ..."
+#     cap_add SYS_ADMIN only         -> "cannot pivot old root directory ...
+#                                       Operation not permitted" (pivot_root
+#                                       is not in the default profile at all)
+#     seccomp=unconfined only        -> sandbox engages: the builder sees no
+#                                       /root and no /nix/var, and its write
+#                                       to $HOME is refused
+#     privileged                     -> same as the line above
+#   Not privileged: that would also unmask /proc and hand over every host
+#   device, neither of which Nix asked for. Not new privilege either way: the
+#   container already mounts /var/run/docker.sock, which is root on the host.
+#
+#   NIX_CONFIG (in the agent's environment) sets sandbox-fallback = false, so
+#   the next time the sandbox cannot engage the build FAILS with the
+#   "kernel namespaces" error above instead of reproducing this bug. It is
+#   an environment variable, not an edit to /etc/nix/nix.conf, because that
+#   file belongs to the plugin image (build-users-group =, include
+#   flox.conf, the baked substituter) and the plugin's environment hook
+#   appends to it at every job; nix merges NIX_CONFIG over the file. Both
+#   readers get it: the daemon, started by /docker-entrypoint.d/10-nix-daemon
+#   from this environment, and the job's nix client, since the agent passes
+#   its environment to jobs (how S3_CACHE_* reaches the plugin hook today).
+#   The plugin sets no NIX_CONFIG of its own, so nothing overwrites it.
+#
+# The flake check builds the full toplevel on this agent. Once the MinIO cache
+# holds paths signed by flox-binary-cache-2 that is mostly substitution; the
+# first builds after this lands compile whatever the cache lacks, sandboxed,
+# and S3_CACHE_PUSH writes it back.
+#
+# If the "kernel namespaces" error ever appears with this in place, the
+# follow-up is privileged: true (verified above) -- never sandbox-fallback =
+# true, which is the silent version of this bug.
 
 name: ac-host-ci
 
@@ -95,6 +152,10 @@ services:
     image: ac-host-buildkite-agent:flox
     restart: unless-stopped
     user: "0:0"
+    # NIX SANDBOX (header above): let Nix create the namespaces its sandbox is
+    # made of. No cap_add -- Nix does its mounts inside its own user namespace.
+    security_opt:
+      - seccomp=unconfined
     depends_on:
       minio-init:
         condition: service_completed_successfully
@@ -102,6 +163,12 @@ services:
       BUILDKITE_AGENT_TOKEN: ${BUILDKITE_AGENT_TOKEN:?set BUILDKITE_AGENT_TOKEN}
       BUILDKITE_AGENT_TAGS: ${BUILDKITE_AGENT_TAGS:-queue=self}
       BUILDKITE_AGENT_NAME: ${BUILDKITE_AGENT_NAME:-ac-box}
+      # NIX SANDBOX (header above). sandbox = true is already the Linux
+      # default; sandbox-fallback = false is the fix, so a sandbox that cannot
+      # engage fails the job instead of building as root on this filesystem.
+      NIX_CONFIG: |
+        sandbox = true
+        sandbox-fallback = false
       AC_STATE: /var/lib/ac-host
       AC_CONTENT: /var/lib/ac-host/content
       AC_SRC: /var/lib/ac-host/src

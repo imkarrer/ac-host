@@ -6,6 +6,15 @@ tree. The Discord countdown at mark 0 queues **`ac-host-ops`** with
 `DOWNTIME=1`, which applies that tree and recycles practice. Last
 `queue-prod` wins — no manual gate.
 
+Nix inside the agent builds **sandboxed**. The compose file runs the
+agent with `seccomp=unconfined` (Docker's default profile denies the
+namespace syscalls the sandbox is made of, so Nix quietly built as root
+on the container's filesystem until 14 Sep 2026) and sets `NIX_CONFIG`
+to `sandbox-fallback = false`, so a sandbox that cannot engage fails the
+job loudly instead. The `NIX SANDBOX` section in
+`compose/docker-compose.buildkite.yml` has the mechanism and the tests.
+No new privilege: the agent already holds the host's docker socket.
+
 Three Buildkite pipelines, one YAML each. A GitHub push cannot recycle.
 
 | Pipeline | YAML | Who starts it |
