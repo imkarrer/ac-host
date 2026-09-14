@@ -89,7 +89,7 @@ services:
         S3_CACHE_BUCKET: ${S3_CACHE_BUCKET:-flox-binary-cache}
         S3_CACHE_ENDPOINT: http://minio:9000
         S3_CACHE_REGION: us-east-1
-        S3_CACHE_PUBLIC_KEY: "flox-binary-cache-1:pSpP6x540XtBh+IMvmW8XrRHJDtIi+b31uvvIA0PyR0="
+        S3_CACHE_PUBLIC_KEY: "flox-binary-cache-1:pSpP6x540XtBh+IMvmW8XrRHJDtIi+b31uvvIA0PyR0= flox-binary-cache-2:ESa71iIsMeX6Wu7EBiXXZlJraWI0HF4xdOF/ivG4UTo="
         # Same pkg-paths the ac-host Flox env uses (no unused gh).
         SEED_PACKAGES: ${SEED_PACKAGES:-python312Full git rsync nixfmt-rfc-style python312Packages.numpy python312Packages.pillow python312Packages.scipy}
     image: ac-host-buildkite-agent:flox
@@ -130,7 +130,7 @@ services:
       S3_CACHE_BUCKET: ${S3_CACHE_BUCKET:-flox-binary-cache}
       S3_CACHE_ENDPOINT: ${S3_CACHE_ENDPOINT:-http://minio:9000}
       S3_CACHE_REGION: ${S3_CACHE_REGION:-us-east-1}
-      S3_CACHE_PUBLIC_KEY: ${S3_CACHE_PUBLIC_KEY:-flox-binary-cache-1:pSpP6x540XtBh+IMvmW8XrRHJDtIi+b31uvvIA0PyR0=}
+      S3_CACHE_PUBLIC_KEY: ${S3_CACHE_PUBLIC_KEY:-flox-binary-cache-1:pSpP6x540XtBh+IMvmW8XrRHJDtIi+b31uvvIA0PyR0= flox-binary-cache-2:ESa71iIsMeX6Wu7EBiXXZlJraWI0HF4xdOF/ivG4UTo=}
       S3_CACHE_PUSH: ${S3_CACHE_PUSH:-true}
       S3_CACHE_SIGNING_KEY: ${S3_CACHE_SIGNING_KEY:?set S3_CACHE_SIGNING_KEY}
     volumes:

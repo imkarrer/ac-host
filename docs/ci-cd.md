@@ -119,21 +119,32 @@ fetching upstream. Steps only set `command` — they do not repeat
 
 | Piece | Where | Secret? |
 | --- | --- | --- |
-| Bucket / endpoint / region / public key / push | pipeline `env:` + agent env + image bake args | no |
-| Public key file | `.buildkite/flox-binary-cache.pub` | no |
-| MinIO root + cache user | `compose/.env.buildkite` | yes |
-| Nix signing key | `S3_CACHE_SIGNING_KEY` in that env file | **yes** — anyone with it can plant trusted store paths |
+| Bucket / endpoint / region / public keys / push | pipeline `env:` + agent env + image bake args | no |
+| Public key file | `.buildkite/flox-binary-cache.pub`, one key per line | no |
+| MinIO root + cache user | homelab's sops, rendered to `/run/secrets/rendered/ci-env` on the box | yes |
+| Nix signing key | `S3_CACHE_SIGNING_KEY` in that render | **yes** — anyone with it can plant trusted store paths |
+| Rotating any of the three | new value in homelab's sops, switch, bounce `ac-host-ci` | — |
 
-Generate or rotate the signing keypair (updates the committed public file):
+That last row is the whole procedure. `minio-init.sh` runs `mc admin user
+add` on every start, and MinIO's CreateUser rewrites an existing user's
+secret, so the cache user follows the render with no box-side step; MinIO
+takes its root credentials from the environment at every start. For the
+signing key, mint the pair as `flox-binary-cache-<n+1>` (`nix key
+generate-secret`), put the secret half in sops, and **add** the public
+half beside the existing ones — `S3_CACHE_PUBLIC_KEY` is a
+space-separated nix.conf list in `.buildkite/*.yml` and the agent compose
+(bake arg and env default), a line in the `.pub` file. Never drop an old
+public key: every NAR already in the bucket is signed by it and stays
+substitutable only while it is trusted. `S3_CACHE_PUBLIC_KEY` is not
+secret and is not in the render; the values in this tree are what the
+agent trusts.
 
-```bash
-bash scripts/ci_nix_cache_key.sh
-# copy the secret line into compose/.env.buildkite
-# update S3_CACHE_PUBLIC_KEY in .buildkite/*.yml and the agent compose to match
-```
-
-A workstation copy of `compose/.env.buildkite` may already have generated
-values; copy that file to the box rather than committing it.
+The bounce is a human act from ssh once the agent is idle: the render
+changes at the switch, but `ac-host-ci` has `restartIfChanged = false`
+(HAZARD 2 in homelab's `modules/ci`), so a running unit keeps the
+environment it started with. Between the switch and the bounce, and
+between a signing-key rotation in sops and this tree's public-key list
+being applied, jobs still run — the cache just stops warming.
 
 ## Pinning the plugin
 
