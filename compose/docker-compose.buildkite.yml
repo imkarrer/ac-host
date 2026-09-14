@@ -44,7 +44,7 @@
 # deploys this box -- so adopt this from a plain SSH session, never through a
 # pipeline step running on the agent itself.
 #
-# NIX SANDBOX (security_opt + NIX_CONFIG on the agent, below)
+# NIX SANDBOX (privileged + NIX_CONFIG on the agent, below)
 #
 # Nix's Linux defaults are sandbox = true AND sandbox-fallback = true, and the
 # fallback is the bug: under Docker's default seccomp profile a clone() with
@@ -76,9 +76,15 @@
 #                                       /root and no /nix/var, and its write
 #                                       to $HOME is refused
 #     privileged                     -> same as the line above
-#   Not privileged: that would also unmask /proc and hand over every host
-#   device, neither of which Nix asked for. Not new privilege either way: the
-#   container already mounts /var/run/docker.sock, which is root on the host.
+#   ON AC-BOX ITSELF (14 Sep 2026, this image: flox-bundled Nix 2.31.5, Docker
+#   29.7.2, NixOS 26.05 kernel) the table is shorter: seccomp=unconfined, and
+#   seccomp=unconfined + cap_add SYS_ADMIN, BOTH still fail with "does not
+#   support the kernel namespaces"; only privileged engages the sandbox. Proven
+#   with throwaway `docker run --rm` containers of this very image and a
+#   one-line derivation, sandbox-fallback = false. So: privileged, decided by
+#   the operator 14 Sep. It also unmasks /proc and hands over host devices,
+#   which Nix did not ask for -- but not new privilege: the container already
+#   mounts /var/run/docker.sock, which is root on the host.
 #
 #   NIX_CONFIG (in the agent's environment) sets sandbox-fallback = false, so
 #   the next time the sandbox cannot engage the build FAILS with the
@@ -153,9 +159,9 @@ services:
     restart: unless-stopped
     user: "0:0"
     # NIX SANDBOX (header above): let Nix create the namespaces its sandbox is
-    # made of. No cap_add -- Nix does its mounts inside its own user namespace.
-    security_opt:
-      - seccomp=unconfined
+    # made of. On ac-box only privileged does; the narrower sets are in the
+    # header with the error each one gave.
+    privileged: true
     depends_on:
       minio-init:
         condition: service_completed_successfully

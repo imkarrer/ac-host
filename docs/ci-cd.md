@@ -7,9 +7,11 @@ tree. The Discord countdown at mark 0 queues **`ac-host-ops`** with
 `queue-prod` wins — no manual gate.
 
 Nix inside the agent builds **sandboxed**. The compose file runs the
-agent with `seccomp=unconfined` (Docker's default profile denies the
-namespace syscalls the sandbox is made of, so Nix quietly built as root
-on the container's filesystem until 14 Sep 2026) and sets `NIX_CONFIG`
+agent `privileged` (Docker's default profile denies the namespace
+syscalls the sandbox is made of, so Nix quietly built as root on the
+container's filesystem until 14 Sep 2026; on ac-box neither `seccomp=unconfined`
+nor `SYS_ADMIN` was enough, only `privileged` -- the compose header has the
+table) and sets `NIX_CONFIG`
 to `sandbox-fallback = false`, so a sandbox that cannot engage fails the
 job loudly instead. The `NIX SANDBOX` section in
 `compose/docker-compose.buildkite.yml` has the mechanism and the tests.
