@@ -32,6 +32,32 @@ class DowntimeTests(unittest.TestCase):
             assert applied is not None
             self.assertEqual(applied["sha"], "abc123")
 
+    def test_recreate_never_builds_and_needs_the_ci_image(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            src = root / "src"
+            state = root / "state"
+            (src / "compose").mkdir(parents=True)
+            (src / "compose" / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+            state.mkdir()
+            (state / ".env").write_text("X=1\n", encoding="utf-8")
+            # Image present: every compose call is a recreate, never a build.
+            with mock.patch.object(pending_deploy, "docker_image_exists", return_value=True), mock.patch.object(
+                ci_downtime.subprocess, "run"
+            ) as run:
+                ci_downtime._recreate_sidecars(src, state)
+            self.assertEqual(run.call_count, 2)
+            for call in run.call_args_list:
+                argv = call.args[0]
+                self.assertNotIn("--build", argv)
+                self.assertIn("--force-recreate", argv)
+            # Image missing: nothing on the box can make it, so nothing is touched.
+            with mock.patch.object(pending_deploy, "docker_image_exists", return_value=False), mock.patch.object(
+                ci_downtime.subprocess, "run"
+            ) as run:
+                ci_downtime._recreate_sidecars(src, state)
+            run.assert_not_called()
+
     def test_main_skips_second_recycle_same_day(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             state = Path(raw)

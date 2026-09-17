@@ -24,6 +24,11 @@ class PendingDeployTests(unittest.TestCase):
         self.assertTrue(pending_deploy.rebuild_sidecars_from_diff(["sidecar/plugin.py"]))
         self.assertTrue(pending_deploy.rebuild_sidecars_from_diff(["bot/bot.py"]))
         self.assertTrue(pending_deploy.rebuild_sidecars_from_diff(["compose/docker-compose.yml"]))
+        # The sidecars import shared/ from the bind-mounted tree, and the
+        # manifest is the image: both are running-container changes now.
+        self.assertTrue(pending_deploy.rebuild_sidecars_from_diff(["shared/series_lib.py"]))
+        self.assertTrue(pending_deploy.rebuild_sidecars_from_diff([".flox/env/manifest.toml"]))
+        self.assertTrue(pending_deploy.rebuild_sidecars_from_diff([".flox/env/manifest.lock"]))
         self.assertFalse(pending_deploy.rebuild_sidecars_from_diff(["scripts/acctl.py", "site/app.js"]))
 
     def test_sync_tree_skips_cache_and_env(self) -> None:

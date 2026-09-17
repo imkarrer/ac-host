@@ -23,7 +23,7 @@ Expected **prod**: `ac-static-blackhawk`, `ac-static-road-america`, `ac-static-g
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `ac-host-static` **activating** > 2 min, journal stuck on `Image … Building` | `compose up --build` sending the whole `src/` tree | `.dockerignore` must exist. Boot must **not** `--build`. `systemctl stop ac-host-static` then `python3 scripts/acctl.py resume` |
+| `ac-host-static` fails at once with `ac-host-env:latest is not in the Docker daemon` | no green `main` build has run since the image moved to CI | `docker images ac-host-env`; push to `main` or re-run the last ac-host build so its `image` + `promote-image` steps load it |
 | Lobbies missing, sidecars up | oneshot died after auth, before `docker run` | `resume` (no rebuild) |
 | Page red, box healthy | stale GitHub `updated` or leftover `maintenance.json` | Wait 90s, or `maintenance --off`. Hard-refresh `app.js` |
 
@@ -39,11 +39,13 @@ python3 scripts/acctl.py resume
 
 `systemctl stop ac-host-static` now paints **maintenance** then stops lobbies (plugin stays). `systemctl start` / boot runs `up-static` **without** `--build`, waits for lobby HTTP, then clears the banner.
 
-Rebuild sidecars only when you changed `sidecar/` or `bot/`:
+Recreate sidecars only when you changed `sidecar/`, `bot/` or `shared/` (the
+code is bind-mounted from the tree; the image `ac-host-env:latest` is built by
+CI with `flox containerize` and never on the box):
 
 ```text
-python3 scripts/acctl.py up-static --rebuild
-docker compose -f compose/docker-compose.yml --env-file /var/lib/ac-host/.env --profile bot up -d --build bot
+python3 scripts/acctl.py up-static --recreate
+docker compose -f compose/docker-compose.yml --env-file /var/lib/ac-host/.env --profile bot up -d --force-recreate bot
 ```
 
 ## Health light
@@ -59,7 +61,7 @@ docker compose -f compose/docker-compose.yml --env-file /var/lib/ac-host/.env --
 
 ## Anti-patterns
 
-- `compose up --build` on boot
+- `compose up --build` anywhere: there is no Dockerfile for the bot or sidecars; the image is CI's
 - `docker cp` + `restart` for the bot
 - Killing plugin so the light “goes red” (use `drain` / `maintenance --on`)
 - Treating GitHub `updated` as proof the box is dead

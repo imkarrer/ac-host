@@ -45,7 +45,7 @@ DISCORD_REVIEW_CHANNEL_ID=123456789012345678
 
 ```bash
 cd /var/lib/ac-host/src
-docker compose -f compose/docker-compose.yml --env-file /var/lib/ac-host/.env --profile bot up -d --build bot
+docker compose -f compose/docker-compose.yml --env-file /var/lib/ac-host/.env --profile bot up -d --force-recreate bot
 docker logs -f ac-host-bot-1
 ```
 

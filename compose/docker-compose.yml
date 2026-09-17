@@ -29,17 +29,33 @@
 # cgroup_parent applies at container CREATION. Existing containers keep their
 # old placement until recreated -- and recreating these means dropping live
 # lobbies, so adopt it in a maintenance window with no drivers connected.
+#
+# THE PYTHON IMAGE (auth, details, plugin, bot)
+#
+# All four run `ac-host-env`, which is .flox/env/manifest.toml containerized:
+# CI builds it with `flox containerize` (scripts/ci_containerize.sh, the
+# `image` step in .buildkite/pipeline.yml) and loads it straight into this
+# box's Docker daemon -- the agent shares /var/run/docker.sock -- as
+# `ac-host-env:<sha>`, promoted to `ac-host-env:latest` once the whole build
+# is green. Nothing here has a `build:` any more and nothing is pulled: the
+# image is either already in the daemon or CI has not run since this landed.
+#
+# The code is NOT in the image. This tree is bind-mounted at /repo (the bot
+# already did that for the livery scripts) and each service names its
+# entrypoint under it; the manifest's [profile] puts /repo/{scripts,bot,
+# sidecar,shared} on PYTHONPATH, the same four roots the tests import from.
+# So a Python change reaches a container through the 03:00 tree sync plus a
+# recreate (ci_downtime.py), and the image changes only when the manifest
+# does. Either way the window needs neither PyPI nor Docker Hub.
 name: ac-host
 
 services:
   auth:
     cgroup_parent: critical.slice
-    build:
-      context: ..
-      dockerfile: sidecar/Dockerfile
-    image: ac-host-auth:latest
+    image: ac-host-env:latest
     network_mode: host
     restart: unless-stopped
+    command: ["python", "-u", "/repo/sidecar/auth.py"]
     environment:
       AUTH_BIND: ${AUTH_BIND:-127.0.0.1:18080}
       AUTH_OPEN: ${AUTH_OPEN:-1}
@@ -47,6 +63,7 @@ services:
       WHITELIST_PATH: /data/whitelist.json
     volumes:
       - ${AC_STATE:?set AC_STATE}:/data
+      - ..:/repo:ro
 
   # Image used by `python scripts/acctl.py up-static` for each catalog/statics.json lobby.
   # Not started by `compose up` itself — each lobby is its own container and port.
@@ -89,13 +106,10 @@ services:
   # Content Manager /api/details so Online shows liveries (server name ends with ℹport).
   details:
     cgroup_parent: critical.slice
-    build:
-      context: ..
-      dockerfile: sidecar/Dockerfile
-    image: ac-host-auth:latest
+    image: ac-host-env:latest
     network_mode: host
     restart: unless-stopped
-    command: ["python", "-u", "/app/details.py"]
+    command: ["python", "-u", "/repo/sidecar/details.py"]
     environment:
       AC_STATE: /data
       AC_CONTENT: /content
@@ -103,17 +117,15 @@ services:
     volumes:
       - ${AC_STATE:?set AC_STATE}:/data:ro
       - ${AC_CONTENT:?set AC_CONTENT}:/content:ro
+      - ..:/repo:ro
 
   # UDP plugin: LAP_COMPLETED → state/leaderboard.json; optional push to GitHub Pages repo
   plugin:
     cgroup_parent: critical.slice
-    build:
-      context: ..
-      dockerfile: sidecar/Dockerfile
-    image: ac-host-auth:latest
+    image: ac-host-env:latest
     network_mode: host
     restart: unless-stopped
-    command: ["python", "-u", "/app/plugin.py"]
+    command: ["python", "-u", "/repo/sidecar/plugin.py"]
     environment:
       AC_STATE: /data
       AC_CATALOG: /catalog
@@ -132,14 +144,13 @@ services:
     volumes:
       - ${AC_STATE:?set AC_STATE}:/data
       - ../catalog:/catalog:ro
+      - ..:/repo:ro
 
   bot:
     cgroup_parent: critical.slice
-    build:
-      context: ..
-      dockerfile: bot/Dockerfile
-    image: ac-host-bot:latest
+    image: ac-host-env:latest
     profiles: ["bot"]
+    command: ["python", "-u", "/repo/bot/bot.py"]
     restart: unless-stopped
     environment:
       DISCORD_TOKEN: ${DISCORD_TOKEN:-}
@@ -179,8 +190,9 @@ services:
       # folders where entry_list.ini and the CM details API expect them.
       - ${AC_CONTENT}:/serve
       - ${AC_BUILD:-/var/lib/ac-host/build}:/build
-      # The pack scripts live in the repo rather than the image so a code change
-      # does not need a rebuild of a 400 MB numpy/scipy image.
+      # /repo carries the bot's own code too now (see THE PYTHON IMAGE above);
+      # it was here first for the pack scripts, so a code change never needs
+      # an image rebuild.
       - ..:/repo:ro
       - ../catalog:/catalog:ro
 

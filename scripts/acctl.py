@@ -13,13 +13,19 @@ import time
 from pathlib import Path
 
 SERVER_IMAGE = "ac-host-server:latest"
-SIDECAR_IMAGE = "ac-host-auth:latest"
 
 REPO = Path(__file__).resolve().parents[1]
 if str(REPO / "shared") not in sys.path:
     sys.path.insert(0, str(REPO / "shared"))
 if str(REPO / "sidecar") not in sys.path:
     sys.path.insert(0, str(REPO / "sidecar"))
+
+import pending_deploy  # noqa: E402
+
+# The bot and sidecar image. Built by CI (scripts/ci_containerize.sh), never
+# here: flox is not on the box, only in the CI agent, and the whole point is
+# that nothing on the box assembles a runtime at 03:00.
+SIDECAR_IMAGE = pending_deploy.PYTHON_IMAGE
 COMPOSE = REPO / "compose" / "docker-compose.yml"
 CATALOG = REPO / "catalog"
 GAME_START = 9600
@@ -307,16 +313,30 @@ def docker_image_exists(name: str) -> bool:
     return result.returncode == 0
 
 
-def sidecar_up_args(service: str, *, rebuild: bool) -> list[str]:
+def sidecar_up_args(service: str, *, recreate: bool) -> list[str]:
+    """`up -d <service>`, with --force-recreate when the code or image moved.
+
+    The code is bind-mounted from this tree, so a plain `up -d` against an
+    unchanged definition keeps the OLD process running on the NEW files;
+    --force-recreate is the restart. Never --build: there is no Dockerfile.
+    """
     args = ["up", "-d"]
-    if rebuild:
-        args.append("--build")
+    if recreate:
+        args.append("--force-recreate")
     args.append(service)
     return args
 
 
-def need_sidecar_rebuild() -> bool:
-    return not docker_image_exists(SIDECAR_IMAGE)
+def ensure_sidecar_image() -> None:
+    """Fail loudly when the CI-built image is missing; nothing here can make it."""
+    if docker_image_exists(SIDECAR_IMAGE):
+        return
+    raise SystemExit(
+        f"{SIDECAR_IMAGE} is not in the Docker daemon. It is built by CI's image step "
+        "(scripts/ci_containerize.sh, flox containerize) and loaded through the agent's "
+        "docker socket on a green main build; there is no Dockerfile to build here. "
+        "Check `docker images ac-host-env` and the last ac-host build on Buildkite."
+    )
 
 
 def ensure_image() -> None:
@@ -481,7 +501,7 @@ def selected_statics(only: str | None) -> list[dict]:
 
 
 def cmd_recycle_static(args: argparse.Namespace) -> None:
-    """Re-render cfg and recreate practice containers. Does not rebuild sidecars."""
+    """Re-render cfg and recreate practice containers. Does not touch the sidecars."""
     for lobby in selected_statics(args.only):
         udp, http, details = ports_for_slot(int(lobby["slot"]))
         cfg = STATE / "static" / lobby["id"] / "cfg"
@@ -502,13 +522,14 @@ def cmd_recycle_static(args: argparse.Namespace) -> None:
 
 
 def cmd_up_static(args: argparse.Namespace) -> None:
-    rebuild = bool(getattr(args, "rebuild", False) or need_sidecar_rebuild())
-    if rebuild:
-        print("sidecar rebuild: missing image or --rebuild", file=sys.stderr)
+    ensure_sidecar_image()
+    recreate = bool(getattr(args, "recreate", False))
+    if recreate:
+        print("sidecar recreate: --recreate", file=sys.stderr)
     sync_site_content()
-    compose(*sidecar_up_args("auth", rebuild=rebuild))
+    compose(*sidecar_up_args("auth", recreate=recreate))
     try:
-        compose(*sidecar_up_args("plugin", rebuild=rebuild))
+        compose(*sidecar_up_args("plugin", recreate=recreate))
     except subprocess.CalledProcessError:
         print("leaderboard plugin skipped (compose has no plugin service?)", file=sys.stderr)
     ensure_image()
@@ -530,7 +551,7 @@ def cmd_up_static(args: argparse.Namespace) -> None:
             f"static {lobby['id']} on {udp}/{http} details={details} "
             f"track={lobby['track']} env={AC_ENV}"
         )
-    compose(*sidecar_up_args("details", rebuild=rebuild))
+    compose(*sidecar_up_args("details", recreate=recreate))
     content_path = dist_dir() / "content.json"
     if content_path.is_file():
         print(f"cm content: {content_path}")
@@ -605,7 +626,7 @@ def cmd_drain(args: argparse.Namespace) -> None:
 def cmd_resume(args: argparse.Namespace) -> None:
     """Start practice from existing images and clear the maintenance banner."""
     args.only = None
-    args.rebuild = False
+    args.recreate = False
     cmd_up_static(args)
 
 
@@ -630,8 +651,8 @@ def cmd_status(_: argparse.Namespace) -> None:
 
 
 def cmd_restart_plugin(_: argparse.Namespace) -> None:
-    """Rebuild and restart only the leaderboard plugin (does not kick drivers)."""
-    compose("up", "-d", "--build", "plugin")
+    """Recreate only the leaderboard plugin onto the current tree and image (no lobby kick)."""
+    compose("up", "-d", "--force-recreate", "plugin")
     print(f"plugin restarted env={AC_ENV}")
 
 
@@ -648,9 +669,10 @@ def main() -> None:
     up = sub.add_parser("up-static", help="Render cfg and start auth + all static practice lobbies")
     up.add_argument("--only", default=None, help="Start one static lobby id")
     up.add_argument(
-        "--rebuild",
+        "--recreate",
         action="store_true",
-        help="Rebuild sidecar images (auth/plugin/details). Boot must not do this.",
+        help="Recreate the sidecars (auth/plugin/details) onto the current tree and image. "
+        "Boot does not need this: the image comes from CI, never from here.",
     )
     up.set_defaults(func=cmd_up_static)
 

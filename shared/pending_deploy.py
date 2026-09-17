@@ -81,7 +81,33 @@ RSYNC_EXCLUDES = (
     ".env",
 ) + PRESERVE_LOCAL
 
-SIDECAR_PATHS = ("sidecar/", "bot/", "compose/docker-compose.yml")
+# The one image the bot and the three sidecars run: .flox/env/manifest.toml
+# containerized by scripts/ci_containerize.sh. `latest` is promoted from the
+# sha tag only after a whole main build is green.
+PYTHON_IMAGE = "ac-host-env:latest"
+
+# A change under any of these means the running bot/sidecar containers are
+# stale and the 03:00 apply must recreate them. The code they run is
+# bind-mounted from the tree (compose/docker-compose.yml), so bot/, sidecar/
+# and the shared/ modules they import all count; .flox/ because the manifest
+# IS the image, so a manifest change is a new `ac-host-env:latest` that the
+# containers have to be recreated onto.
+SIDECAR_PATHS = (
+    "sidecar/",
+    "bot/",
+    "shared/",
+    ".flox/",
+    "compose/docker-compose.yml",
+)
+
+
+def docker_image_exists(name: str) -> bool:
+    result = subprocess.run(
+        ["docker", "image", "inspect", name],
+        check=False,
+        capture_output=True,
+    )
+    return result.returncode == 0
 
 
 def state_dir(explicit: Path | None = None) -> Path:
@@ -157,7 +183,12 @@ def box_state_available(state: Path | None = None) -> bool:
 
 def rebuild_sidecars_from_diff(changed_paths: list[str]) -> bool:
     for path in changed_paths:
-        normalized = path.replace("\\", "/").lstrip("./")
+        normalized = path.replace("\\", "/")
+        # A prefix strip, not str.lstrip("./"): that strips CHARACTERS, so it
+        # turned ".flox/env/manifest.toml" into "flox/env/manifest.toml" and a
+        # manifest change could never match ".flox/".
+        while normalized.startswith("./"):
+            normalized = normalized[2:]
         if any(normalized == item.rstrip("/") or normalized.startswith(item) for item in SIDECAR_PATHS):
             return True
     return False

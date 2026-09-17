@@ -153,7 +153,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        # If a sidecar rebuild ever hangs again, fail instead of blocking boot forever.
+        # If a sidecar start ever hangs again (it did, when boot ran `--build`), fail instead of blocking boot forever.
         TimeoutStartSec = "15min";
         WorkingDirectory = cfg.repoDir;
         Environment = [
@@ -210,11 +210,13 @@ in
     # for `bot` names it in `units`.
     #
     # Same compose project, same service, same env file as ci_downtime's
-    # nightly rebuild -- deliberately, so the two agree. `docker compose up`
+    # nightly recreate -- deliberately, so the two agree. `docker compose up`
     # against a container whose definition has not changed is a no-op, and
     # against one that has, a recreate; either way there is one container
-    # named ac-host-bot-1, never two, and the nightly --build keeps doing the
-    # image work this unit does not.
+    # named ac-host-bot-1, never two. The image itself (ac-host-env, the flox
+    # manifest containerized) is built by CI and loaded into this daemon; no
+    # unit on the box builds it, and the bot's code is bind-mounted from
+    # repoDir, so the nightly `--force-recreate` is what picks up a change.
     #
     # After ac-host-static, not because the bot needs the lobbies but because
     # both run `docker compose` in the ac-host project and compose takes a

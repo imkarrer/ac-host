@@ -34,9 +34,11 @@ Race night (start/stop quali and race) stays on the Discord bot +
 | --- | --- | --- | --- | --- |
 | **Unit tests** | `ac-host` | every push | `scripts/ci_test.sh` inside Flox | no |
 | **Lint** | `ac-host` | every push | `scripts/ci_lint.sh` (`compileall` + `nixfmt --check flake.nix`) | no |
+| **Image** | `ac-host` | every push | `scripts/ci_containerize.sh build`: `flox containerize` of `.flox/env/manifest.toml`, loaded into the box's Docker daemon as `ac-host-env:<sha>`, then `scripts/ci_image_smoke.py` imports every entrypoint inside it | no |
+| **Promote image** | `ac-host` | green `main` | `scripts/ci_containerize.sh promote`: `ac-host-env:<sha>` becomes `ac-host-env:latest`, the tag compose runs. The code is bind-mounted from the tree, so this only matters when the manifest changed | no |
 | **Queue prod** | `ac-host` | green `main` | `scripts/ci_queue_prod.py` overwrites `/var/lib/ac-host/pending-src` (fold) | no |
 | **Publish pages** | `ac-host` | green `main` | `scripts/ci_publish_pages.py` renders `site/` and copies allowed files into `AC_PAGES_CHECKOUT`. Never touches `leaderboard.json` | no |
-| **Downtime** | `ac-host-ops` | bot countdown mark 0, `DOWNTIME=1` | `scripts/ci_downtime.py`: apply pending, then one `recycle-static`. Same calendar day will not recycle twice. `/downtime-drill` does not queue this | yes |
+| **Downtime** | `ac-host-ops` | bot countdown mark 0, `DOWNTIME=1` | `scripts/ci_downtime.py`: apply pending, recreate bot/sidecars onto it if their code or the manifest changed (no `--build`: nothing on the box builds an image), then one `recycle-static`. Same calendar day will not recycle twice. `/downtime-drill` does not queue this | yes |
 | **Emergency apply** | `ac-host-ops` | New Build with `EMERGENCY=1` | `scripts/ci_apply_now.py` writes `apply-now.json` (drain + resume) | yes |
 | **Series race pack** | `ac-host-series` | `/admin quali-close` sets `SERIES_ID` | `scripts/ci_series_pack.sh` → `generate_series_liveries.py` + `publish_series_race_pack.py`. If Buildkite is unset, the bot bakes in-process (old path) | no |
 
@@ -99,10 +101,10 @@ the old Apply-now block; do not Unblock them.
    `BUILDKITE_API_TOKEN`, `BUILDKITE_ORG=isaac-karrer`,
    `BUILDKITE_PIPELINE=ac-host`, `BUILDKITE_PIPELINE_OPS=ac-host-ops`,
    `BUILDKITE_PIPELINE_SERIES=ac-host-series` in `/var/lib/ac-host/.env`
-   and rebuild the bot.
+   and recreate the bot (`docker compose ... --profile bot up -d --force-recreate bot`).
 5. Optional pages push: clone `ac-practice` to `$AC_PAGES_CHECKOUT` and
    set `AC_PAGES_PUSH=1`.
-6. Rebuild the bot so mark 0 can POST `ac-host-ops` with `DOWNTIME=1`.
+6. Recreate the bot so mark 0 can POST `ac-host-ops` with `DOWNTIME=1`.
    Then `systemctl disable --now ac-host-nightly.timer` so only one recycle.
 7. Push `.flox/`, `.buildkite/`, and the `ci_*` scripts to `main`.
 

@@ -63,7 +63,7 @@ def apply_pending(state: Path) -> str:
     print(f"apply {sha or '(unknown)'} -> {dest}")
     pending_deploy.sync_tree(staged, dest)
     if pending.get("rebuild_sidecars"):
-        _rebuild_sidecars(dest, state)
+        _recreate_sidecars(dest, state)
     pending_deploy.write_applied(
         {
             "sha": sha,
@@ -79,16 +79,33 @@ def apply_pending(state: Path) -> str:
     return sha
 
 
-def _rebuild_sidecars(src: Path, state: Path) -> None:
+def _recreate_sidecars(src: Path, state: Path) -> None:
+    """Restart the bot and sidecars onto the tree just synced and the current image.
+
+    Nothing is built here. The image (``ac-host-env:latest``) was built by CI's
+    ``image`` step with ``flox containerize`` and loaded into this daemon before
+    the tree was even queued; the code is bind-mounted from ``src``. So the
+    03:00 window depends on neither PyPI nor Docker Hub, which ``up --build``
+    used to reach for -- and ``--force-recreate`` is what makes a container pick
+    up the new bind-mounted code, since ``up -d`` alone sees an unchanged
+    definition and leaves the old process running.
+    """
     compose = src / "compose" / "docker-compose.yml"
     envf = state / ".env"
     if not compose.is_file() or not envf.is_file():
-        print("sidecar rebuild skipped: compose or .env missing")
+        print("sidecar recreate skipped: compose or .env missing")
+        return
+    if not pending_deploy.docker_image_exists(pending_deploy.PYTHON_IMAGE):
+        print(
+            f"sidecar recreate skipped: {pending_deploy.PYTHON_IMAGE} is not in the Docker daemon. "
+            "CI's image step (scripts/ci_containerize.sh) loads it on a green main build; "
+            "the running containers are left as they are."
+        )
         return
     base = ["docker", "compose", "-f", str(compose), "--env-file", str(envf)]
-    print("rebuilding sidecars")
-    subprocess.run(base + ["up", "-d", "--build", "auth", "plugin", "details"], check=False)
-    subprocess.run(base + ["--profile", "bot", "up", "-d", "--build", "bot"], check=False)
+    print("recreating sidecars")
+    subprocess.run(base + ["up", "-d", "--force-recreate", "auth", "plugin", "details"], check=False)
+    subprocess.run(base + ["--profile", "bot", "up", "-d", "--force-recreate", "bot"], check=False)
 
 
 def recycle_static(src: Path) -> None:
