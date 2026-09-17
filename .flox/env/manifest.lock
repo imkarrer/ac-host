@@ -36,7 +36,7 @@
     },
     "hook": {},
     "profile": {
-      "common": "  export PYTHONPATH=\"$FLOX_ENV_PROJECT/scripts:$FLOX_ENV_PROJECT/bot:$FLOX_ENV_PROJECT/sidecar:$FLOX_ENV_PROJECT/shared${PYTHONPATH:+:$PYTHONPATH}\"\n"
+      "common": "  ac_root=\"${FLOX_ENV_PROJECT:-${AC_REPO:-/repo}}\"\n  export PYTHONPATH=\"$ac_root/scripts:$ac_root/bot:$ac_root/sidecar:$ac_root/shared${PYTHONPATH:+:$PYTHONPATH}\"\n  unset ac_root\n"
     },
     "options": {}
   },

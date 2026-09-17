@@ -1,5 +1,17 @@
 schema-version = "1.14.0"
 
+# This one manifest is three things: the developer's shell (`flox activate`),
+# the CI gate (.buildkite/pipeline.yml runs every step under the flox plugin),
+# and the runtime image the bot and sidecars run from on ac-box --
+# scripts/ci_containerize.sh turns it into `ac-host-env:<sha>` with
+# `flox containerize`, and compose/docker-compose.yml runs that image with this
+# tree bind-mounted at /repo. Adding a package here is adding it to prod.
+#
+# The image is containerized in "dev" activation mode (the default), not
+# "run": run mode leaves the environment's site-packages off PYTHONPATH, so
+# `import discord` fails inside the container. Dev mode is also what CI
+# activates, so the image is exactly the closure the tests ran under.
+
 
 ## Install Packages --------------------------------------------------
 ##  $ flox install gum  <- puts a package in [install] section below
@@ -52,8 +64,20 @@ discordpy.pkg-path = "python312Packages.discordpy"
 ## ... sourced by _your shell_ when you run 'flox activate'.
 ## -------------------------------------------------------------------
 [profile]
+# The tree's four import roots. In a shell or CI FLOX_ENV_PROJECT is the
+# checkout; inside the containerized image there is no project directory, so
+# fall back to where compose/docker-compose.yml bind-mounts the tree (AC_REPO,
+# /repo). The sidecars import `downtime`, `atomic_json`, `server_health` and
+# `series_lib` from shared/ through this path, exactly as the tests do.
+#
+# Sourced by `flox activate`, `flox activate -c '<cmd>'` (the CI plugin) and
+# the image's entrypoint; NOT by `flox activate -- <cmd>` (flox 1.14: `--`
+# runs the command without the profile). scripts/ci_test.sh sets PYTHONPATH
+# itself for that reason.
 common = '''
-  export PYTHONPATH="$FLOX_ENV_PROJECT/scripts:$FLOX_ENV_PROJECT/bot:$FLOX_ENV_PROJECT/sidecar:$FLOX_ENV_PROJECT/shared${PYTHONPATH:+:$PYTHONPATH}"
+  ac_root="${FLOX_ENV_PROJECT:-${AC_REPO:-/repo}}"
+  export PYTHONPATH="$ac_root/scripts:$ac_root/bot:$ac_root/sidecar:$ac_root/shared${PYTHONPATH:+:$PYTHONPATH}"
+  unset ac_root
 '''
 
 
