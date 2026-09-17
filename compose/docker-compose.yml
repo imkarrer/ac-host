@@ -47,12 +47,26 @@
 # So a Python change reaches a container through the 03:00 tree sync plus a
 # recreate (ci_downtime.py), and the image changes only when the manifest
 # does. Either way the window needs neither PyPI nor Docker Hub.
+#
+# `init: true` on all four, because of what the image's entrypoint is: flox's
+# activation runs the command as a CHILD of a `bash -s` that stays PID 1 and,
+# being PID 1, ignores the SIGTERM `docker stop` sends. Measured on this
+# image: without init, `docker stop auth` waits the full 10 s grace period
+# and SIGKILLs everything (exit 137); with docker-init as PID 1 the signal
+# reaches the bash, it exits, and the container is down in ~120 ms (exit
+# 143) -- what the Dockerfile images did, since python was PID 1 there. None
+# of these programs traps SIGTERM, so nothing is lost either way; what init
+# buys back is the 10 s on every recreate, stop and reboot. If one of them
+# ever needs a real SIGTERM (a graceful Discord close), that needs flox to
+# exec the command in a containerized activation; init alone forwards to the
+# bash, not to python.
 name: ac-host
 
 services:
   auth:
     cgroup_parent: critical.slice
     image: ac-host-env:latest
+    init: true
     network_mode: host
     restart: unless-stopped
     command: ["python", "-u", "/repo/sidecar/auth.py"]
@@ -107,6 +121,7 @@ services:
   details:
     cgroup_parent: critical.slice
     image: ac-host-env:latest
+    init: true
     network_mode: host
     restart: unless-stopped
     command: ["python", "-u", "/repo/sidecar/details.py"]
@@ -123,6 +138,7 @@ services:
   plugin:
     cgroup_parent: critical.slice
     image: ac-host-env:latest
+    init: true
     network_mode: host
     restart: unless-stopped
     command: ["python", "-u", "/repo/sidecar/plugin.py"]
@@ -149,6 +165,7 @@ services:
   bot:
     cgroup_parent: critical.slice
     image: ac-host-env:latest
+    init: true
     profiles: ["bot"]
     command: ["python", "-u", "/repo/bot/bot.py"]
     restart: unless-stopped
