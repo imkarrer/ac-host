@@ -28,7 +28,31 @@ steps:
       - imkarrer/flox#main:
           command: bash scripts/ci_lint.sh
 
+  # The bot/sidecar image: .flox/env/manifest.toml containerized by flox, so
+  # the closure the tests above ran under is the closure that ships. Loaded
+  # straight into this box's Docker daemon (the agent mounts its socket) as
+  # ac-host-env:<sha>, then the entrypoints are imported inside it. Before the
+  # wait, on every branch, because an image that cannot be built or cannot run
+  # auth.py is as red as a failing test and must block queue-prod the same way.
+  # No tag moves here; `latest` is promoted below, after the wait.
+  - label: ":docker: Image (flox containerize)"
+    key: image
+    command: bash scripts/ci_containerize.sh build
+    plugins:
+      - imkarrer/flox#main:
+          command: bash scripts/ci_containerize.sh build
+
   - wait: ~
+
+  # ac-host-env:<sha> -> ac-host-env:latest, the tag compose/docker-compose.yml
+  # runs. Behind the wait for the same reason queue-prod is: a red build must
+  # not move the tag the 03:00 recreate (ci_downtime.py) and the boot-time
+  # `up -d` (ac-host-static, ac-host-bot units) both start from. Plain docker
+  # from the agent; nothing here needs the flox environment.
+  - label: ":docker: Promote image to latest"
+    key: promote-image
+    if: build.branch == "main"
+    command: bash scripts/ci_containerize.sh promote
 
   - label: ":package: Queue prod (folded into downtime)"
     key: queue-prod
