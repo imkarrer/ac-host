@@ -55,7 +55,10 @@ case "$mode" in
     # scripts/ci_image_smoke.py, run by the image's own python against the
     # tree copied to /repo. AC_REPO is what the manifest's [profile] builds
     # PYTHONPATH from when there is no FLOX_ENV_PROJECT.
-    cid="$(docker create -e AC_REPO=/repo "$IMAGE:$sha" python /repo/scripts/ci_image_smoke.py)"
+    # --cgroup-parent batch.slice: this runs on the prod box on every branch
+    # push, and a Docker tenant fences its own containers (ADR 0005) -- the
+    # same slice the agent itself runs in (compose/docker-compose.buildkite.yml).
+    cid="$(docker create --cgroup-parent batch.slice -e AC_REPO=/repo "$IMAGE:$sha" python /repo/scripts/ci_image_smoke.py)"
     trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
     git archive --format=tar --prefix=repo/ HEAD bot sidecar shared scripts | docker cp - "$cid:/"
     docker start -a "$cid"

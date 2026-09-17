@@ -23,7 +23,7 @@ Expected **prod**: `ac-static-blackhawk`, `ac-static-road-america`, `ac-static-g
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `ac-host-static` fails at once with `ac-host-env:latest is not in the Docker daemon` | no green `main` build has run since the image moved to CI | `docker images ac-host-env`; push to `main` or re-run the last ac-host build so its `image` + `promote-image` steps load it |
+| Lobbies up, no `ac-host-auth-1`/`plugin`/`details`; journal says `sidecars skipped: ac-host-env:latest is not in the Docker daemon` | no green `main` build has run since the image moved to CI (up-static starts lobbies first and skips the sidecars, exit 0) | `docker images ac-host-env`; push to `main` or re-run the last ac-host build so its `image` + `promote-image` steps load it, then `acctl.py resume` |
 | Lobbies missing, sidecars up | oneshot died after auth, before `docker run` | `resume` (no rebuild) |
 | Page red, box healthy | stale GitHub `updated` or leftover `maintenance.json` | Wait 90s, or `maintenance --off`. Hard-refresh `app.js` |
 

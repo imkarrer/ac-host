@@ -25,6 +25,12 @@ def main() -> int:
     last = str(applied.get("sha") or "")
     changed = pending_deploy.git_changed_paths(REPO, last, sha if sha != "unknown" else "HEAD")
     rebuild = pending_deploy.rebuild_sidecars_from_diff(changed) if last else False
+    # A recreate the last apply wanted but skipped (ci_downtime.py: image or
+    # .env missing) is still owed, whatever this diff touched. Older stamps
+    # have no key; they were written by a code path that never skipped.
+    if last and not applied.get("sidecars_recreated", True):
+        print(f"last apply {last} did not recreate the sidecars; recreating on this one")
+        rebuild = True
 
     dest = pending_deploy.pending_src_dir(state)
     pending_deploy.sync_tree(REPO, dest)

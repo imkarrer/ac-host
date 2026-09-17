@@ -54,9 +54,17 @@ steps:
     if: build.branch == "main"
     command: bash scripts/ci_containerize.sh promote
 
+  # After promote-image, not beside it: queue-prod stages the tree with
+  # rebuild_sidecars=true whenever bot/, sidecar/, shared/ or .flox/ moved,
+  # and the 03:00 apply recreates the containers onto whatever `latest` is.
+  # If promote failed, that is the PREVIOUS image under the new tree -- for a
+  # manifest change, a crash-looping bot, which is the process that fires the
+  # next night's build. depends_on makes a failed promote leave nothing
+  # staged and the build red.
   - label: ":package: Queue prod (folded into downtime)"
     key: queue-prod
     if: build.branch == "main"
+    depends_on: [promote-image]
     command: python3 scripts/ci_queue_prod.py
     plugins:
       - imkarrer/flox#main:

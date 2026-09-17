@@ -327,16 +327,24 @@ def sidecar_up_args(service: str, *, recreate: bool) -> list[str]:
     return args
 
 
-def ensure_sidecar_image() -> None:
-    """Fail loudly when the CI-built image is missing; nothing here can make it."""
+def sidecar_image_present() -> bool:
+    """Whether the CI-built image is in the daemon; says loudly where it comes from if not.
+
+    Never a SystemExit: up-static is ac-host-static's ExecStart, whose ExecStop
+    is `docker rm -f` on the lobbies, and a missing SIDECAR image must never
+    mean no race servers. The caller skips the sidecars and carries on.
+    """
     if docker_image_exists(SIDECAR_IMAGE):
-        return
-    raise SystemExit(
-        f"{SIDECAR_IMAGE} is not in the Docker daemon. It is built by CI's image step "
-        "(scripts/ci_containerize.sh, flox containerize) and loaded through the agent's "
-        "docker socket on a green main build; there is no Dockerfile to build here. "
-        "Check `docker images ac-host-env` and the last ac-host build on Buildkite."
+        return True
+    print(
+        f"sidecars skipped: {SIDECAR_IMAGE} is not in the Docker daemon. "
+        "CI's image step (scripts/ci_containerize.sh, flox containerize) loads it through "
+        "the agent's docker socket on a green main build; there is no Dockerfile to build "
+        "here. Check `docker images ac-host-env` and the last ac-host build on Buildkite. "
+        "Lobbies are up without auth/plugin/details.",
+        file=sys.stderr,
     )
+    return False
 
 
 def ensure_image() -> None:
@@ -522,16 +530,13 @@ def cmd_recycle_static(args: argparse.Namespace) -> None:
 
 
 def cmd_up_static(args: argparse.Namespace) -> None:
-    ensure_sidecar_image()
+    """Lobbies first, sidecars after -- so a missing sidecar image costs the
+    sidecars, never the race servers. The auth sidecar is consulted per join,
+    not at lobby start, so the order is free."""
     recreate = bool(getattr(args, "recreate", False))
     if recreate:
         print("sidecar recreate: --recreate", file=sys.stderr)
     sync_site_content()
-    compose(*sidecar_up_args("auth", recreate=recreate))
-    try:
-        compose(*sidecar_up_args("plugin", recreate=recreate))
-    except subprocess.CalledProcessError:
-        print("leaderboard plugin skipped (compose has no plugin service?)", file=sys.stderr)
     ensure_image()
     for lobby in selected_statics(args.only):
         udp, http, details = ports_for_slot(int(lobby["slot"]))
@@ -551,7 +556,13 @@ def cmd_up_static(args: argparse.Namespace) -> None:
             f"static {lobby['id']} on {udp}/{http} details={details} "
             f"track={lobby['track']} env={AC_ENV}"
         )
-    compose(*sidecar_up_args("details", recreate=recreate))
+    if sidecar_image_present():
+        compose(*sidecar_up_args("auth", recreate=recreate))
+        try:
+            compose(*sidecar_up_args("plugin", recreate=recreate))
+        except subprocess.CalledProcessError:
+            print("leaderboard plugin skipped (compose has no plugin service?)", file=sys.stderr)
+        compose(*sidecar_up_args("details", recreate=recreate))
     content_path = dist_dir() / "content.json"
     if content_path.is_file():
         print(f"cm content: {content_path}")

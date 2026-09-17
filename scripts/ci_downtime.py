@@ -62,13 +62,19 @@ def apply_pending(state: Path) -> str:
     dest = pending_deploy.src_dir()
     print(f"apply {sha or '(unknown)'} -> {dest}")
     pending_deploy.sync_tree(staged, dest)
-    if pending.get("rebuild_sidecars"):
-        _recreate_sidecars(dest, state)
+    wanted = bool(pending.get("rebuild_sidecars"))
+    # Recorded in the applied stamp, and read back by ci_queue_prod.py: a
+    # recreate that was wanted but skipped (image missing, .env missing) must
+    # not be forgotten just because the NEXT diff, taken against this sha,
+    # touches no sidecar path -- that is old code and old image running
+    # indefinitely with every record saying "applied".
+    recreated = _recreate_sidecars(dest, state) if wanted else False
     pending_deploy.write_applied(
         {
             "sha": sha,
             "applied_at": pending_deploy.utcnow(),
-            "rebuild_sidecars": bool(pending.get("rebuild_sidecars")),
+            "rebuild_sidecars": wanted,
+            "sidecars_recreated": recreated or not wanted,
             "queued_at": pending.get("queued_at", ""),
             "source": "buildkite-downtime",
         },
@@ -79,8 +85,10 @@ def apply_pending(state: Path) -> str:
     return sha
 
 
-def _recreate_sidecars(src: Path, state: Path) -> None:
+def _recreate_sidecars(src: Path, state: Path) -> bool:
     """Restart the bot and sidecars onto the tree just synced and the current image.
+
+    Returns whether the recreate was issued; False is a skip the caller records.
 
     Nothing is built here. The image (``ac-host-env:latest``) was built by CI's
     ``image`` step with ``flox containerize`` and loaded into this daemon before
@@ -94,18 +102,19 @@ def _recreate_sidecars(src: Path, state: Path) -> None:
     envf = state / ".env"
     if not compose.is_file() or not envf.is_file():
         print("sidecar recreate skipped: compose or .env missing")
-        return
+        return False
     if not pending_deploy.docker_image_exists(pending_deploy.PYTHON_IMAGE):
         print(
             f"sidecar recreate skipped: {pending_deploy.PYTHON_IMAGE} is not in the Docker daemon. "
             "CI's image step (scripts/ci_containerize.sh) loads it on a green main build; "
             "the running containers are left as they are."
         )
-        return
+        return False
     base = ["docker", "compose", "-f", str(compose), "--env-file", str(envf)]
     print("recreating sidecars")
     subprocess.run(base + ["up", "-d", "--force-recreate", "auth", "plugin", "details"], check=False)
     subprocess.run(base + ["--profile", "bot", "up", "-d", "--force-recreate", "bot"], check=False)
+    return True
 
 
 def recycle_static(src: Path) -> None:

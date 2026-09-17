@@ -54,12 +54,16 @@
 # image: without init, `docker stop auth` waits the full 10 s grace period
 # and SIGKILLs everything (exit 137); with docker-init as PID 1 the signal
 # reaches the bash, it exits, and the container is down in ~120 ms (exit
-# 143) -- what the Dockerfile images did, since python was PID 1 there. None
-# of these programs traps SIGTERM, so nothing is lost either way; what init
-# buys back is the 10 s on every recreate, stop and reboot. If one of them
-# ever needs a real SIGTERM (a graceful Discord close), that needs flox to
-# exec the command in a containerized activation; init alone forwards to the
-# bash, not to python.
+# 143). The old Dockerfile images were NOT better here: python was PID 1 with
+# no handler, and PID 1 ignores an unhandled SIGTERM too, so those containers
+# also took the 10 s -- the first-night recreate onto this image stops the
+# four old containers with that grace period, once. Python never sees SIGTERM
+# in either shape: with init it dies on namespace teardown when the bash
+# exits; none of these programs traps the signal, so nothing is lost. What
+# init buys is the 10 s on every recreate, stop and reboot from now on. If one
+# of them ever needs a real SIGTERM (a graceful Discord close), that needs
+# flox to exec the command in a containerized activation; init alone forwards
+# to the bash, not to python.
 name: ac-host
 
 services:
