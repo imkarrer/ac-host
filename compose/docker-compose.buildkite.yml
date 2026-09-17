@@ -35,9 +35,20 @@
 # block rather than sharing background's. Expect roughly "26-27,54-55" here;
 # re-run the check above rather than trusting either number.
 #
-# batch.slice also carries MemoryMax (~25 GiB on ac-box, derived from the tier's
-# share of declared capacity). If a build ever OOMs, that is the number to
-# revisit -- in homelab's hosts/<host>/host.nix and tier shares, not here.
+# batch.slice also carries MemoryMax, derived from the tier's share of declared
+# capacity: 12.5 GiB on ac-box since the share went to 0.05 (it was ~25 GiB at
+# 0.10; the difference went to background for klein 9B). If a build ever OOMs,
+# the share in homelab's hosts/<host>/host.nix is one number to revisit -- but
+# not the first. One did OOM, 17 Sep 2026: agent-hub build 6 compiled the
+# ik_llama.cpp fork under the flox plugin, ninja ran `-j4` because the
+# container's nproc is 4 (batch's two physical cores plus their SMT siblings),
+# and four cc1plus on the fork's iqk template units hit the ceiling exactly
+# (MemoryPeak == MemoryMax; `g++: fatal error: Killed signal terminated
+# program cc1plus`). homelab's tier comment already assumed "the agent's builds
+# run -j2 on two cores"; `cores = 2` in NIX_CONFIG below makes that true
+# (nix passes it as NIX_BUILD_CORES, which ninja and make honour), so a build
+# uses the two cores it owns and half the memory, rather than the model
+# server's ceiling being cut to fit a compile.
 #
 # cgroup_parent applies at container CREATION. Existing containers keep their
 # old placement until recreated, and recreating the agent kills the process that
@@ -172,9 +183,13 @@ services:
       # NIX SANDBOX (header above). sandbox = true is already the Linux
       # default; sandbox-fallback = false is the fix, so a sandbox that cannot
       # engage fails the job instead of building as root on this filesystem.
+      # cores = 2: the CPU FENCING header, last paragraph -- a build gets the
+      # two physical cores batch owns, not their siblings as well, and the
+      # memory that goes with two compilers rather than four.
       NIX_CONFIG: |
         sandbox = true
         sandbox-fallback = false
+        cores = 2
       AC_STATE: /var/lib/ac-host
       AC_CONTENT: /var/lib/ac-host/content
       AC_SRC: /var/lib/ac-host/src
