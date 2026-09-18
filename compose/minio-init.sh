@@ -21,6 +21,18 @@ done
 
 mc mb --ignore-existing "local/${bucket}"
 
+# Anonymous READ on the bucket, so the box itself can substitute what CI
+# built: homelab's modules/ci lists http://127.0.0.1:9000/${bucket} as a nix
+# substituter with the flox-binary-cache-* public keys (ADR 0009 step 1c --
+# a flox tenant's first activation on the box would otherwise compile its
+# flake packages through nix-daemon, unfenced, beside the race servers).
+# Safe to open: MinIO is published on 127.0.0.1 only (docker-compose.
+# buildkite.yml), every object is a signed store path of a public repo,
+# and writes still need the flox-cache user above. `mc anonymous` on the
+# mc that ships with the image; older mc spelled it `mc policy set download`.
+mc anonymous set download "local/${bucket}" \
+  || mc policy set download "local/${bucket}"
+
 if [ -n "${S3_CACHE_ACCESS_KEY_ID:-}" ] && [ -n "${S3_CACHE_SECRET_ACCESS_KEY:-}" ]; then
   # No existence guard, on purpose. The server's CreateUser (MinIO
   # RELEASE.2025-09-07 lineage, the image on the box) rewrites an existing
