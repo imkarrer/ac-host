@@ -265,9 +265,26 @@ services:
       - /var/lib/homelab:/var/lib/homelab
       - /var/run/docker.sock:/var/run/docker.sock
       - buildkite-builds:/buildkite/builds
+      # The agent's own /nix, so what a job builds persists across
+      # recreates. NAMED BY FLOX VERSION, and here is why. The image installs
+      # flox from its .deb, which puts the binary in /nix/store and leaves
+      # /usr/bin/flox a symlink to it; Docker seeds a named volume from the
+      # image's /nix exactly once, when the volume is first created. So a
+      # volume born from the 1.14.0 image did not carry 1.16.0's store path,
+      # and the first agent recreate after the FLOX_VERSION bump (18 Sep
+      # 2026, 21:24 CDT) registered an agent with a dangling /usr/bin/flox:
+      # every flox step failed until the volume was dropped by hand. With
+      # the version in the name, an upgrade gets a fresh volume seeded from
+      # the new image and the old one stays behind as the rollback; a
+      # `docker volume rm` of the retired one is hygiene, not repair. The
+      # cost of a fresh volume is warmth only: every output CI ever built
+      # is in MinIO (the plugin pushes them), so the first jobs substitute.
+      # The version is in the volume's `name:` below, so FLOX_VERSION is
+      # bumped in one place (the build arg above).
       - buildkite-nix:/nix
 
 volumes:
   buildkite-builds:
   buildkite-nix:
+    name: ac-host-ci_buildkite-nix-flox-${FLOX_VERSION:-1.16.0}
   minio-data:
