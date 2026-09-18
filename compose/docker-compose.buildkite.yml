@@ -210,6 +210,15 @@ services:
       # is scoped to the pages repo, this one to homelab, and neither should
       # be able to do the other's job. Empty means the step skips, loudly.
       HOMELAB_PUSH_TOKEN: ${HOMELAB_PUSH_TOKEN:-}
+      # The one private tenant repo, cloned over HTTPS: git rewrites exactly
+      # that repo's URL to carry the token (a prefix match, so the .git
+      # suffix Buildkite clones with is covered). Every other github.com URL
+      # is untouched, and the agent logs the URL it was given, not the
+      # rewritten one. Empty means the rewrite carries no token and a private
+      # clone fails the way it does today. Fine-grained, Contents read only.
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: url.https://x-access-token:${BUILDKITE_CLONE_TOKEN:-}@github.com/imkarrer/inquire-platform.insteadOf
+      GIT_CONFIG_VALUE_0: https://github.com/imkarrer/inquire-platform
       AWS_ACCESS_KEY_ID: ${S3_CACHE_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${S3_CACHE_SECRET_ACCESS_KEY}
       AWS_EC2_METADATA_DISABLED: "true"
