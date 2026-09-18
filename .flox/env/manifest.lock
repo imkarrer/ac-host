@@ -1,7 +1,7 @@
 {
   "lockfile-version": 1,
   "manifest": {
-    "schema-version": "1.14.0",
+    "schema-version": "1.16.0",
     "install": {
       "dejavu_fonts": {
         "pkg-path": "dejavu_fonts"
@@ -106,37 +106,6 @@
     {
       "attr_path": "dejavu_fonts",
       "broken": false,
-      "derivation": "/nix/store/aip1pg84axj3jg2y7i4wig393q4ij0rf-dejavu-fonts-2.37.drv",
-      "description": "Typeface family based on the Bitstream Vera fonts",
-      "install_id": "dejavu_fonts",
-      "license": "Unspecified free software license",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "dejavu-fonts-2.37",
-      "pname": "dejavu_fonts",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:43:52.912015Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "2.37",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/kbnnlp7fpl8lgr6hhly8w16vijknilad-dejavu-fonts-2.37"
-      },
-      "system": "x86_64-darwin",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "dejavu_fonts",
-      "broken": false,
       "derivation": "/nix/store/chajanq5hxaxrb2qanyih8za8j8n64v8-dejavu-fonts-2.37.drv",
       "description": "Typeface family based on the Bitstream Vera fonts",
       "install_id": "dejavu_fonts",
@@ -232,38 +201,6 @@
     {
       "attr_path": "python312Packages.discordpy",
       "broken": false,
-      "derivation": "/nix/store/jxfk7q4qidj39nlinjl6j5c24k6agmgd-python3.12-discord.py-2.5.2.drv",
-      "description": "Python wrapper for the Discord API",
-      "install_id": "discordpy",
-      "license": "MIT",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "python3.12-discord.py-2.5.2",
-      "pname": "discordpy",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:44:06.651958Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "2.5.2",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "dist": "/nix/store/imgby879a935nq001p8x8z953bzbdrfv-python3.12-discord.py-2.5.2-dist",
-        "out": "/nix/store/iqzid1mgzjbw07xfx43vlpxk1vxg88dl-python3.12-discord.py-2.5.2"
-      },
-      "system": "x86_64-darwin",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "python312Packages.discordpy",
-      "broken": false,
       "derivation": "/nix/store/zq4acwwh3fn69aylr17rx5h6sp9gw86j-python3.12-discord.py-2.5.2.drv",
       "description": "Python wrapper for the Discord API",
       "install_id": "discordpy",
@@ -352,37 +289,6 @@
         "out": "/nix/store/fj5v9hzpzr9jvcpb4d1zqlsacll9n2mp-gh-2.78.0"
       },
       "system": "aarch64-linux",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "gh",
-      "broken": false,
-      "derivation": "/nix/store/j2j15dll0pg12qghz43kikds95hkq7rk-gh-2.78.0.drv",
-      "description": "GitHub CLI tool",
-      "install_id": "gh",
-      "license": "MIT",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "gh-2.78.0",
-      "pname": "gh",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:43:53.401804Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "2.78.0",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/sfpszlvhvlh9alfjfdv4dn5acjalihnl-gh-2.78.0"
-      },
-      "system": "x86_64-darwin",
       "group": "toplevel",
       "priority": 5
     },
@@ -487,39 +393,6 @@
     {
       "attr_path": "git",
       "broken": false,
-      "derivation": "/nix/store/asmf27ybgmdfkmgn1vrfl87g0havppnk-git-2.50.1.drv",
-      "description": "Distributed version control system",
-      "install_id": "git",
-      "license": "GPL-2.0",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "git-2.50.1",
-      "pname": "git",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:43:53.431629Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "2.50.1",
-      "outputs_to_install": [
-        "out",
-        "out"
-      ],
-      "outputs": {
-        "doc": "/nix/store/axw33im2q7q6bi3j8cbhi139n9k1q9zb-git-2.50.1-doc",
-        "out": "/nix/store/h32rn7zl7ac3jl0iidf7ll3rwj81961x-git-2.50.1"
-      },
-      "system": "x86_64-darwin",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "git",
-      "broken": false,
       "derivation": "/nix/store/s9ilqag44931jnwrazwrha1ql5cfahq4-git-2.50.1.drv",
       "description": "Distributed version control system",
       "install_id": "git",
@@ -616,37 +489,6 @@
     {
       "attr_path": "nixfmt-rfc-style",
       "broken": false,
-      "derivation": "/nix/store/1ajkif3bhxzi6ymrhg01x6nmka6byw53-nixfmt-1.0.0.drv",
-      "description": "Official formatter for Nix code",
-      "install_id": "nixfmt-rfc-style",
-      "license": "MPL-2.0",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "nixfmt-1.0.0",
-      "pname": "nixfmt-rfc-style",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:43:56.779124Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "1.0.0",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/l08p667r8vvjr5x5xwyxfyf6mbdy0ncr-nixfmt-1.0.0"
-      },
-      "system": "x86_64-darwin",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "nixfmt-rfc-style",
-      "broken": false,
       "derivation": "/nix/store/1k4az8bzy7m2wyf4d9x6n92pb8q3bl5h-nixfmt-1.0.0.drv",
       "description": "Official formatter for Nix code",
       "install_id": "nixfmt-rfc-style",
@@ -736,38 +578,6 @@
         "out": "/nix/store/kj2ynqwzs4b73g4hjqklw29wm1j18gsx-python3.12-numpy-2.3.2"
       },
       "system": "aarch64-linux",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "python312Packages.numpy",
-      "broken": false,
-      "derivation": "/nix/store/73gxnazflrpxwgpl87kd5pv2f28byk48-python3.12-numpy-2.3.2.drv",
-      "description": "Scientific tools for Python",
-      "install_id": "numpy",
-      "license": "BSD-3-Clause",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "python3.12-numpy-2.3.2",
-      "pname": "numpy",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:44:10.260187Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "2.3.2",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "dist": "/nix/store/6icjkzjffswz471pl6fh5p1dbcwd9jsv-python3.12-numpy-2.3.2-dist",
-        "out": "/nix/store/vd8zpxgc0a8svh720315wn886g0dbsz0-python3.12-numpy-2.3.2"
-      },
-      "system": "x86_64-darwin",
       "group": "toplevel",
       "priority": 5
     },
@@ -870,38 +680,6 @@
     {
       "attr_path": "python312Packages.pillow",
       "broken": false,
-      "derivation": "/nix/store/is3fl9rb5xcmsllp0qm0vwlqjl74m20j-python3.12-pillow-11.3.0.drv",
-      "description": "Friendly PIL fork (Python Imaging Library)",
-      "install_id": "pillow",
-      "license": "MIT-CMU",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "python3.12-pillow-11.3.0",
-      "pname": "pillow",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:44:10.792253Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "11.3.0",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "dist": "/nix/store/zm0ajw09yil42ar1sc005n5id3zwgwg1-python3.12-pillow-11.3.0-dist",
-        "out": "/nix/store/25qacnshkxi2hqbvm0q8515afvzi1b2g-python3.12-pillow-11.3.0"
-      },
-      "system": "x86_64-darwin",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "python312Packages.pillow",
-      "broken": false,
       "derivation": "/nix/store/zlrvj64a3zl715mig7bv5j00m4v4yr7w-python3.12-pillow-11.3.0.drv",
       "description": "Friendly PIL fork (Python Imaging Library)",
       "install_id": "pillow",
@@ -991,37 +769,6 @@
         "out": "/nix/store/jij9z6imnjl6ns2x3fr0cgfssy3j273d-python3-3.12.11"
       },
       "system": "aarch64-linux",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "python312Full",
-      "broken": false,
-      "derivation": "/nix/store/axj8r2hnwjj941y08qn3jq5rrxcvczvl-python3-3.12.11.drv",
-      "description": "High-level dynamically-typed programming language",
-      "install_id": "python312Full",
-      "license": "Python-2.0",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "python3-3.12.11",
-      "pname": "python312Full",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:44:04.927920Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "python3-3.12.11",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/y3z25yr49hyabwjgjxn45v8i97wrgi25-python3-3.12.11"
-      },
-      "system": "x86_64-darwin",
       "group": "toplevel",
       "priority": 5
     },
@@ -1122,37 +869,6 @@
     {
       "attr_path": "rsync",
       "broken": false,
-      "derivation": "/nix/store/8qlvn6ijph2wddz7n4b0v8bmc5c6v36c-rsync-3.4.1.drv",
-      "description": "Fast incremental file transfer utility",
-      "install_id": "rsync",
-      "license": "GPL-3.0-or-later",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "rsync-3.4.1",
-      "pname": "rsync",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:44:33.020246Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "3.4.1",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/lnhgqs98ivb91gdlasll8av6ybhr6q1n-rsync-3.4.1"
-      },
-      "system": "x86_64-darwin",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "rsync",
-      "broken": false,
       "derivation": "/nix/store/jn17a76w7dvqn71kvjhkq1wfqlcrfj5z-rsync-3.4.1.drv",
       "description": "Fast incremental file transfer utility",
       "install_id": "rsync",
@@ -1242,38 +958,6 @@
         "out": "/nix/store/pj7bg4rnpqw4snhn13mg4kk12lkzh4i9-python3.12-scipy-1.16.1"
       },
       "system": "aarch64-linux",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "python312Packages.scipy",
-      "broken": false,
-      "derivation": "/nix/store/gj9np3qqrz0bp68ah8a7x5hlqn165kpq-python3.12-scipy-1.16.1.drv",
-      "description": "SciPy (pronounced 'Sigh Pie') is open-source software for mathematics, science, and engineering",
-      "install_id": "scipy",
-      "license": "BSD-3-Clause",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "python3.12-scipy-1.16.1",
-      "pname": "scipy",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:44:13.361055Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "1.16.1",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "dist": "/nix/store/1csrbk8qsyjz3hjy4gsx25bsm2gya4qg-python3.12-scipy-1.16.1-dist",
-        "out": "/nix/store/kr0v4765vx09hkbx5s1wjhp4lfsdmag6-python3.12-scipy-1.16.1"
-      },
-      "system": "x86_64-darwin",
       "group": "toplevel",
       "priority": 5
     },

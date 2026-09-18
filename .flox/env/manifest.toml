@@ -1,4 +1,4 @@
-schema-version = "1.14.0"
+schema-version = "1.16.0"
 
 # This one manifest is three things: the developer's shell (`flox activate`),
 # the CI gate (.buildkite/pipeline.yml runs every step under the flox plugin),
