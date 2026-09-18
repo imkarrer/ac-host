@@ -159,7 +159,12 @@ services:
       context: "${FLOX_PLUGIN_CONTEXT:-https://github.com/imkarrer/flox-buildkite-plugin.git#main}"
       dockerfile: Dockerfile
       args:
-        FLOX_VERSION: ${FLOX_VERSION:-1.14.0}
+        # The agent's flox is the version every tenant lock is read with in
+        # CI. Kept equal to the box's (homelab flake.nix `flox` input, v1.16.0
+        # since 03a2285, 18 Sep 2026): a lock written by a newer flox can be
+        # unreadable by an older one, so the readers -- box, this agent, the
+        # operator's WSL -- move before any manifest's schema-version does.
+        FLOX_VERSION: ${FLOX_VERSION:-1.16.0}
         S3_CACHE_BUCKET: ${S3_CACHE_BUCKET:-flox-binary-cache}
         S3_CACHE_ENDPOINT: http://minio:9000
         S3_CACHE_REGION: us-east-1
