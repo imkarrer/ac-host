@@ -122,25 +122,21 @@ name: ac-host-ci
 
 services:
   minio:
-    # NOT PULLABLE, 26 Sep 2026 (homelab-ygc.11). Docker Hub no longer
-    # serves minio/minio or minio/mc: "pull access denied ... repository
-    # does not exist", and hub.docker.com/v2/repositories/minio/minio is a
-    # 404 while the org's other repos answer. quay.io/minio/{minio,mc} are
-    # not public either (the anonymous pull token grants no actions; skopeo
-    # says unauthorized), and MinIO's README now reads "The MinIO community
-    # edition is now distributed as source code only." This name resolves
-    # on arcade-box only because the image was `docker save | docker
-    # load`ed from the Z840 -- id 14cea493d9a3, label
-    # release=RELEASE.2025-09-07T16-13-09Z -- and compose's default
-    # pull_policy (missing) is satisfied by a local image. A fresh daemon
-    # cannot start this stack. Until the replacement is decided (the bead
-    # lists what still resolves: nixpkgs' minio through the ci flox
-    # environment or a dockerTools image, a self-hosted copy of these
-    # bytes, bitnamilegacy, Chainguard, AIStor): do not `compose pull`, do
-    # not `docker image prune -a` with this stack down, and do not point
-    # this line at a name the daemon cannot resolve -- `up -d` would fail
-    # on minio and the agent, behind minio-init, would not come up.
-    image: minio/minio:latest
+    # LOCAL IMAGE, never pulled. Built by homelab from its nixpkgs pin
+    # (modules/ci/default.nix, dockerTools) and `docker load`ed into this
+    # daemon by ac-host-ci.service's ExecStartPre, before this stack
+    # starts: the upstream minio/minio and minio/mc images left every
+    # public registry on/after 26 Sep 2026 (Docker Hub 404s the repos,
+    # quay.io grants anonymous pulls nothing, the community edition is
+    # source-only; homelab-ygc.11). The tag is constant on purpose -- the
+    # bytes move with homelab's flake.lock, and compose recreates these
+    # two services when the image ID the tag resolves to changes (the
+    # agent's recreate paragraph below). Never `pull_policy: always` here:
+    # there is nothing to pull, and a `compose pull` would fail rather than
+    # refresh. If the load has not happened on this daemon, `up -d` fails
+    # on minio and the agent, behind minio-init, does not come up -- so
+    # homelab's half switches first.
+    image: homelab/minio:nixpkgs
     restart: unless-stopped
     cgroup_parent: batch.slice
     command: server /data --console-address ":9001"
@@ -154,10 +150,10 @@ services:
       - minio-data:/data
 
   minio-init:
-    # Same as minio above: unpullable since 26 Sep 2026, on the box only as
-    # a loaded image (id a7fe349ef4bd, created 2025-09-07, label
-    # release=1754467928).
-    image: minio/mc:latest
+    # Same origin as minio above: homelab's dockerTools image of nixpkgs'
+    # minio-client, loaded before this stack starts. It ships /bin/sh
+    # (busybox) and `mc` on PATH, which is all minio-init.sh needs.
+    image: homelab/minio-client:nixpkgs
     cgroup_parent: batch.slice
     depends_on:
       minio:
