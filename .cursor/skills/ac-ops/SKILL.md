@@ -8,9 +8,14 @@ description: >-
   resume, maintenance, heartbeat, or reboot.
 ---
 
-# Operate ac-box (practice)
+# Operate arcade-box (practice)
 
-SSH `ac-box` (`192.168.1.50`, user from `Host ac-box`). Game NIC is `enp8s0`. Do not assume `eno1` is up.
+Two host names, and since the cutover of 26 Sep 2026 (homelab ADR 0010) they mean:
+
+- **`arcade-box`** — the racing box. Lenovo M920q, `192.168.1.50`, one wired NIC `eno2` (`wlo1` is a Wi-Fi card with no carrier; there is no `eno1`). Runs the lobbies, the sidecars, the bot, docker and the CI agent. Every command in this skill runs here.
+- **`ac-box`** — the HP Z840, `192.168.1.51`. Model server (`agent-hub`) only: no docker, no lobbies, nothing this skill touches. Not for this skill.
+
+SSH `arcade-box` (root; the alias in homelab's `~/.ssh/config`, key `~/.ssh/id_ed25519_ac-host`; password ssh is off). homelab owns the host (`hosts/arcade-box/` there); this tree reaches it through `queue-prod` and the bot's 03:00 `DOWNTIME` build, never by hand.
 
 ## After a reboot (do this first)
 

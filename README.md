@@ -1,6 +1,6 @@
 # ac-host
 
-NixOS + Docker stack for always-on Assetto Corsa practice lobbies and extra race containers on different ports. This folder is **not** game content. Keep it next to the Steam install so you can pack tracks from here; copy the git tree to the NixOS box.
+NixOS + Docker stack for always-on Assetto Corsa practice lobbies and extra race containers on different ports. This folder is **not** game content. Keep it next to the Steam install so you can pack tracks from here; the git tree reaches the box through CI (see **Deploy**).
 
 ## What is here
 
@@ -18,7 +18,7 @@ NixOS + Docker stack for always-on Assetto Corsa practice lobbies and extra race
 | `sidecar/` | SteamID whitelist via `AUTH_PLUGIN_ADDRESS` |
 | `bot/` | Discord `/steam-link` (manual bot token later) |
 | `modules/ac-host.nix` | Docker, firewall port range, systemd static lobbies |
-| `hosts/ac-box/` | Example NixOS host — replace hardware-configuration.nix on the box |
+| `hosts/ac-box/` | Gone since 8 Sep 2026 (`40e9f48`): the pre-homelab example host, not what runs. The host is homelab's `hosts/arcade-box/`; this tree ships only the module |
 
 Three practice lobbies stay up together (124, GR86, Civic FK8, NA Miata, Elise SC, E30): **Blackhawk Farms**, **Brainerd Competition**, **Brainerd Donnybrooke**. Magione stays in the catalog as a stock-track fallback for races. The GR86 and Civic need Custom Shaders Patch. The player README and live leaderboard are on **GitHub Pages** (`site/`); the home box pushes status outbound — no `:8099`.
 
@@ -32,43 +32,34 @@ python scripts/sync_content.py --track brainerd-competition
 python -m unittest sidecar/test_auth.py
 ```
 
-Copy `content/` and the git tree to the NixOS box (`/var/lib/ac-host/src` and `/var/lib/ac-host/content`).
+Copy `content/` to arcade-box (`/var/lib/ac-host/content`). The git tree is not copied by hand; CI stages it (see **Deploy**).
 
-## Deploy over SSH
+## Deploy
 
-The box on this LAN is `192.168.1.50` (OpenSSH 10.5). A deploy key lives at `%USERPROFILE%\.ssh\id_ed25519_ac-host` and is listed in `hosts/ac-box/ssh-keys.nix`. Password SSH stays on until that file is non-empty **and** you rebuild.
+The lobbies run on **arcade-box** (Lenovo M920q, `192.168.1.50`, ssh alias `arcade-box`, root). homelab owns that host and its NixOS switch (homelab ADR 0001: the racing tenant no longer owns the host; `hosts/arcade-box/` there, the deploy key in its `ssh-keys.local.nix`). This tree is a tenant — the module homelab composes plus the compose stack the box runs — and none of it is copied to the box by hand: a green `main` build stages the tree (`queue-prod` writes `/var/lib/ac-host/pending-src`), the bot's 03:00 `DOWNTIME` build applies it and recycles the lobbies once, and a human applies early with `homelab/scripts/hub-deploy.sh`. `docs/ci-cd.md` has the pipeline. Since 26 Sep 2026 (homelab ADR 0010) the alias `ac-box` is the Z840 at `192.168.1.51`: model server only, no docker, no lobbies, nothing of this tree.
 
-From `ac-host/`, type the installer account password once:
+Password SSH is off on both hosts. A fresh Windows machine needs the operator key (`%USERPROFILE%\.ssh\id_ed25519_ac-host`, already listed in homelab's `ssh-keys.local.nix`) and this block in `~/.ssh/config`, the same one homelab's WSL carries:
 
-```powershell
-python scripts/bootstrap_ssh.py --host 192.168.1.50 --user isaac
+```text
+Host arcade-box
+  HostName 192.168.1.50
+  User root
+  IdentityFile ~/.ssh/id_ed25519_ac-host
+  IdentitiesOnly yes
 ```
 
-Use the username you created in the NixOS installer if it is not `isaac`. That copies the pubkey to that user and to root, writes `Host ac-box` in `~/.ssh/config`, and pulls `hardware-configuration.nix`. After it prints `key-login-ok`:
-
-```powershell
-ssh ac-box
-```
-
-Then copy the tree and switch (do this **after** hardware-config is real, or the first rebuild can miss disks):
-
-```powershell
-ssh ac-box "sudo mkdir -p /var/lib/ac-host/src /var/lib/ac-host/content"
-tar --exclude content --exclude state --exclude .git -cf - . | ssh ac-box "sudo tar -C /var/lib/ac-host/src -xf -"
-ssh ac-box "sudo nixos-rebuild switch --flake /var/lib/ac-host/src#ac-box"
-```
+`scripts/bootstrap_ssh.py` is the pre-homelab bootstrap (pubkey over the installer's password login, pull `hardware-configuration.nix`, write `hosts/ac-box/ssh-keys.local.nix`); the tar-and-switch steps that followed it here left with the host config on 8 Sep 2026 (`40e9f48`). Its alias is `arcade-box` now, but its key file sits under a directory this tree no longer has, so it does not run past `--install-only`. History, not a deploy path.
 
 Copy `content/` separately when you want the tracks on the box (Brainerd is large).
 
-## On the NixOS box
+## On arcade-box
 
-1. Run `bootstrap_ssh.py` from this PC (installer password, once).
-2. Confirm `hosts/ac-box/hardware-configuration.nix` was overwritten from the box.
-3. Copy packed content to `/var/lib/ac-host/content`.
-4. `cp compose/env.example /var/lib/ac-host/.env` and set `AC_ADMIN_PASSWORD`.
-5. `nixos-rebuild switch --flake /var/lib/ac-host/src#ac-box`
+Once per box, what homelab's switch does not do:
 
-Or merge `nixosModules.ac-host` into an existing flake and keep your own hardware config.
+1. Copy packed content to `/var/lib/ac-host/content`.
+2. `cp compose/env.example /var/lib/ac-host/.env` and set `AC_ADMIN_PASSWORD`.
+
+The switch is homelab's: `nixosModules.ac-host` is an input of its `arcade-box` host, and this flake has no `nixosConfigurations`, so there is nothing here to `nixos-rebuild`. Or merge `nixosModules.ac-host` into your own flake and keep your own hardware config.
 
 Without waiting for systemd:
 
