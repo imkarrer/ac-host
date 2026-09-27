@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Push the full car folders a series needs onto ac-box's build content tree.
+"""Push the full car folders a series needs onto the racing box's build content tree (arcade-box).
 
 The server's own content tree is deliberately slim — the dedicated server needs
 `data.acd` and skin folders, not models — but placing a race number is derived
@@ -28,7 +28,10 @@ for _path in (str(REPO / "shared"), str(REPO / "scripts")):
 
 import series_lib  # noqa: E402
 
-DEFAULT_HOST = "ac-box"
+# The racing box is arcade-box since 26 Sep 2026 (homelab ADR 0010). "ac-box"
+# is the Z840 now, which still has a /var/lib/ac-host tree on disk, so the old
+# default would push to the wrong machine and report success (homelab-ygc.18).
+DEFAULT_HOST = "arcade-box"
 DEFAULT_BUILD = "/var/lib/ac-host/build"
 
 
