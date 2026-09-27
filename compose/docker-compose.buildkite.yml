@@ -122,6 +122,24 @@ name: ac-host-ci
 
 services:
   minio:
+    # NOT PULLABLE, 26 Sep 2026 (homelab-ygc.11). Docker Hub no longer
+    # serves minio/minio or minio/mc: "pull access denied ... repository
+    # does not exist", and hub.docker.com/v2/repositories/minio/minio is a
+    # 404 while the org's other repos answer. quay.io/minio/{minio,mc} are
+    # not public either (the anonymous pull token grants no actions; skopeo
+    # says unauthorized), and MinIO's README now reads "The MinIO community
+    # edition is now distributed as source code only." This name resolves
+    # on arcade-box only because the image was `docker save | docker
+    # load`ed from the Z840 -- id 14cea493d9a3, label
+    # release=RELEASE.2025-09-07T16-13-09Z -- and compose's default
+    # pull_policy (missing) is satisfied by a local image. A fresh daemon
+    # cannot start this stack. Until the replacement is decided (the bead
+    # lists what still resolves: nixpkgs' minio through the ci flox
+    # environment or a dockerTools image, a self-hosted copy of these
+    # bytes, bitnamilegacy, Chainguard, AIStor): do not `compose pull`, do
+    # not `docker image prune -a` with this stack down, and do not point
+    # this line at a name the daemon cannot resolve -- `up -d` would fail
+    # on minio and the agent, behind minio-init, would not come up.
     image: minio/minio:latest
     restart: unless-stopped
     cgroup_parent: batch.slice
@@ -136,6 +154,9 @@ services:
       - minio-data:/data
 
   minio-init:
+    # Same as minio above: unpullable since 26 Sep 2026, on the box only as
+    # a loaded image (id a7fe349ef4bd, created 2025-09-07, label
+    # release=1754467928).
     image: minio/mc:latest
     cgroup_parent: batch.slice
     depends_on:
@@ -262,6 +283,15 @@ services:
       # systemd that is `ac-host-ci.service` starting: a reboot, or a
       # deliberate restart from a plain SSH session. Never from a Buildkite
       # step (HAZARD 2 in homelab's modules/ci).
+      # "Changed definition" means THIS service's: compose 5.4.0 (the
+      # version on the box and in WSL) recreates a container when its own
+      # config hash or image changed, not when a dependency's did. A swap
+      # of minio's or minio-init's image above recreates those two and
+      # leaves this container running (probed 26 Sep 2026, homelab-ygc.11,
+      # with a three-service busybox stack of the same depends_on shape;
+      # `--always-recreate-deps` is the opt-in). `--build` is the other
+      # way this container moves: a new agent image ID from the plugin's
+      # #main is a recreate too.
       - /var/lib/homelab:/var/lib/homelab
       - /var/run/docker.sock:/var/run/docker.sock
       - buildkite-builds:/buildkite/builds
