@@ -47,7 +47,7 @@ def main() -> None:
     print("After Join from Content Manager:")
     print("  1. Check Documents/Assetto Corsa/cfg/race.ini → [CAR_0] SKIN=")
     print("  2. Note spawned livery in-game")
-    print("  3. ssh ac-box 'docker logs ac-dev-static-dev-blackhawk 2>&1 | tail -20'")
+    print("  3. ssh arcade-box 'docker logs ac-dev-static-dev-blackhawk 2>&1 | tail -20'")
     print()
     print("Dev join INFO uses AC_PUBLIC_IP:8089 (set in .env)")
     print("Details: curl -s http://127.0.0.1:8189/api/details | python3 -m json.tool")

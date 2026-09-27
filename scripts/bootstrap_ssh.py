@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Create a deploy key, write it into the Nix config, and install it on ac-box.
+"""Create a deploy key, write it into the Nix config, and install it on the racing box.
 
-The live installer still accepts a password. This copies the pubkey over that
-one-time password login, then later rebuilds keep the key and turn passwords off.
+Pre-homelab bootstrap: a fresh installer accepts a password, this copies the
+pubkey over that one-time login, and later rebuilds keep the key and turn
+passwords off. Since 26 Sep 2026 (homelab ADR 0010) the racing box is
+arcade-box (192.168.1.50), homelab declares its deploy key in
+hosts/arcade-box/ssh-keys.local.nix, and password ssh is off on both hosts;
+`ac-box` now names the Z840, the model server. The ssh alias written here
+therefore defaults to `arcade-box`, matching homelab's ~/.ssh/config. KEYS_NIX
+below is this tree's pre-homelab host directory (dropped 8 Sep 2026).
 
 Examples (PowerShell):
 
@@ -82,11 +88,12 @@ def write_keys_nix(keys: list[str]) -> None:
     print(f"wrote {KEYS_NIX} ({len(unique)} keys)", file=sys.stderr)
 
 
-def upsert_ssh_config(host: str, user: str, identity: Path) -> None:
+def upsert_ssh_config(host: str, user: str, identity: Path, alias: str) -> None:
     config_path = home_ssh() / "config"
+    marker = f"Host {alias}"
     block = "\n".join(
         [
-            "Host ac-box",
+            marker,
             f"  HostName {host}",
             f"  User {user}",
             f"  IdentityFile {identity}",
@@ -95,7 +102,6 @@ def upsert_ssh_config(host: str, user: str, identity: Path) -> None:
         ]
     )
     existing = config_path.read_text(encoding="utf-8") if config_path.is_file() else ""
-    marker = "Host ac-box"
     if marker in existing:
         lines = existing.splitlines(keepends=True)
         out: list[str] = []
@@ -112,7 +118,7 @@ def upsert_ssh_config(host: str, user: str, identity: Path) -> None:
         existing = "".join(out).rstrip() + ("\n\n" if out else "")
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(existing + block, encoding="utf-8")
-    print(f"wrote {config_path} Host ac-box -> {user}@{host}", file=sys.stderr)
+    print(f"wrote {config_path} {marker} -> {user}@{host}", file=sys.stderr)
 
 
 def remote_install(host: str, user: str, pubkey: str) -> None:
@@ -208,6 +214,11 @@ def main() -> None:
     parser.add_argument("--host", default=os.environ.get("AC_BOX_HOST", "127.0.0.1"))
     parser.add_argument("--user", default=os.environ.get("AC_BOX_USER", "nixosuser"))
     parser.add_argument(
+        "--alias",
+        default="arcade-box",
+        help="Host alias written to ~/.ssh/config (homelab's config uses arcade-box for the racing box)",
+    )
+    parser.add_argument(
         "--install-only",
         action="store_true",
         help="Only copy the key over SSH; do not rewrite ssh-keys.local.nix",
@@ -222,13 +233,13 @@ def main() -> None:
     pubkey = ensure_key()
     if not args.install_only:
         write_keys_nix([pubkey, *extra_pubkeys()])
-        upsert_ssh_config(args.host, args.user, key_paths()[0])
+        upsert_ssh_config(args.host, args.user, key_paths()[0], args.alias)
     if args.local_only:
         return
     remote_install(args.host, args.user, pubkey)
     verify(args.host, args.user)
     fetch_hardware(args.host, args.user)
-    print(f"SSH ready: ssh ac-box   (or {args.user}@{args.host})")
+    print(f"SSH ready: ssh {args.alias}   (or {args.user}@{args.host})")
 
 
 if __name__ == "__main__":
