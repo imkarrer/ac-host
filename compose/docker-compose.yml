@@ -14,17 +14,30 @@
 # excluded from slice assignment precisely to avoid the restart that applying
 # Slice= would force (ac-host-static's ExecStop is `docker rm -f`).
 #
-# Verified on ac-box before this change: every ac-host container reported
-# CgroupParent="" and ran under system.slice with MemoryMax=infinity and the
-# full 0-55 cpuset. So the racing stack was the one tenant on the box with no
-# resource ceiling at all.
+# Verified on the Z840, the racing box until 26 Sep 2026, before this change:
+# every ac-host container reported CgroupParent="" and ran under system.slice
+# with MemoryMax=infinity and the full 0-55 cpuset. So the racing stack was the
+# one tenant on the box with no resource ceiling at all.
 #
-# critical.slice carries MemoryMax (~25 GiB on ac-box, derived from the tier's
-# share of declared capacity) and CPUWeight, but deliberately NO AllowedCPUs:
-# critical is fenced AROUND, never confined itself, so races can still burst
-# onto every core when the background/batch tiers are idle. If a lobby ever
-# OOMs, the number to revisit is the tier share in homelab's
-# hosts/<host>/host.nix and configuration.nix, not this file.
+# critical.slice carries MemoryMax and CPUWeight, but deliberately NO
+# AllowedCPUs: critical is never confined, so races can still burst onto every
+# core when the other tiers are idle. (On arcade-box no tier is fenced at all;
+# under contention CPUWeight decides -- critical 500, batch 300, interactive
+# 200, background 50.) The ceiling is the tier's memoryShare of the host's
+# declared capacity, in whole MiB (homelab's modules/tenant/resources.nix). On
+# arcade-box that is 0.20 (hosts/arcade-box/configuration.nix) of 31 GiB
+# (hosts/arcade-box/host.nix):
+#
+#   floor(0.20 x 31 GiB x 1024) = floor(6348.8) = 6348 MiB
+#                               = 6656360448 bytes, ~6.2 GiB
+#
+# for every lobby, race container, sidecar and the bot together. Read live 28
+# Sep 2026: `systemctl show critical.slice -p MemoryMax` -> 6656360448,
+# CPUWeight 500, AllowedCPUs empty; memory.peak ~2.5 GiB since the slice came
+# up on 26 Sep, and never at the ceiling (memory.events max 0). On the Z840 it
+# was ~25 GiB. If a lobby ever OOMs, the number to revisit is the tier share in
+# homelab's hosts/<host>/configuration.nix (capacity in host.nix), not this
+# file.
 #
 # cgroup_parent applies at container CREATION. Existing containers keep their
 # old placement until recreated -- and recreating these means dropping live

@@ -439,9 +439,11 @@ def wait_lobby_http(*, timeout_sec: float = 90.0) -> bool:
 # (homelab.tenants.assetto.tier = "critical"). Without --cgroup-parent, dockerd
 # places these containers in system.slice with MemoryMax=infinity and the full
 # host cpuset, regardless of which unit or session invoked docker -- verified on
-# ac-box, where every lobby reported CgroupParent="" and cpuset 0-55.
+# the Z840 (the racing box until 26 Sep 2026), where every lobby reported
+# CgroupParent="" and cpuset 0-55.
 #
-# critical.slice carries a MemoryMax but deliberately no AllowedCPUs, so a lobby
+# critical.slice carries a MemoryMax (~6.2 GiB on arcade-box; the arithmetic is
+# in compose/docker-compose.yml) but deliberately no AllowedCPUs, so a lobby
 # can still use every core when the background/batch tiers are idle. Same
 # mechanism and the same reasoning as the cgroup_parent keys in
 # compose/docker-compose.yml and compose/docker-compose.buildkite.yml; it has to
