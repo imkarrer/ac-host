@@ -1,5 +1,7 @@
 # Plan: dual-NIC split — game traffic vs. operational (SSH) network
 
+> **History, 28 Sep 2026.** Written 4 Sep 2026 for the Z840, which was then `ac-box`, the racing box at `192.168.1.50`. It was not carried out as written. The management NIC was never brought up: homelab ADR 0007 (12 Sep 2026) moved nothing to it. The one piece that landed was scoping the lobby ports to a single interface, `services.ac-host.lanInterface` (`920b04c`, 8 Sep). Since 26 Sep 2026 (homelab ADR 0010) the lobbies run on arcade-box, which has one wired NIC (`eno2`). Kept for the reasoning; nothing below is a step to take.
+
 ## Why
 
 `ac-box` has two physical NICs but only one is in use. Everything — player game traffic, SSH, Grafana, Prometheus, UniFi polling — shares `192.168.1.50`. Splitting them gives:

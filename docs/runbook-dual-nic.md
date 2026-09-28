@@ -1,5 +1,7 @@
 # Runbook: dual-NIC split — operator steps
 
+> **History, 28 Sep 2026: not a runbook to run.** Written for the Z840, which was then `ac-box`, the racing box, and not carried out as written. [`plan-dual-nic.md`](plan-dual-nic.md)'s banner says what landed. homelab ADR 0007 (12 Sep 2026) moved nothing to a management interface, and since 26 Sep 2026 (homelab ADR 0010) the lobbies run on arcade-box, which has one wired NIC.
+
 Execution order for [`plan-dual-nic.md`](plan-dual-nic.md). That doc is the design and the reasoning; this one is the do-list.
 
 ## Access modes
