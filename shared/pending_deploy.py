@@ -1,4 +1,4 @@
-"""Queue a prod tree for the 03:00 recycle. No SSH — files live on ac-box.
+"""Queue a prod tree for the 03:00 recycle. No SSH — files live on the racing box.
 
 Buildkite (agent on the box) writes ``pending-deploy.json`` + ``pending-src/``.
 The bot's 03:00 countdown queues ``DOWNTIME=1``, which applies that tree
@@ -177,7 +177,7 @@ def clear_pending(state: Path | None = None) -> None:
 
 
 def box_state_available(state: Path | None = None) -> bool:
-    """True when this process can see the ac-box state directory."""
+    """True when this process can see the tenant's state directory (AC_STATE)."""
     return state_dir(state).is_dir()
 
 

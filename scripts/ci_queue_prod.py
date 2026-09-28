@@ -17,7 +17,7 @@ import pending_deploy  # noqa: E402
 def main() -> int:
     state = pending_deploy.state_dir()
     if not pending_deploy.box_state_available(state):
-        print(f"skip queue-prod: {state} is not a directory (agent is not on ac-box)")
+        print(f"skip queue-prod: {state} (AC_STATE) is not a directory on this agent; nothing staged")
         return 0
 
     sha = (os.environ.get("BUILDKITE_COMMIT") or "").strip() or "unknown"

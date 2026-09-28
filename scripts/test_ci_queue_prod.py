@@ -1,3 +1,5 @@
+import contextlib
+import io
 import os
 import tempfile
 import unittest
@@ -46,6 +48,21 @@ class QueueProdTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             pending = self._queue(Path(raw), {"sha": "old0000", "rebuild_sidecars": True}, ["site/app.js"])
         self.assertFalse(pending["rebuild_sidecars"])
+
+    def test_missing_state_dir_skips_green_and_stages_nothing(self) -> None:
+        # An agent that cannot see the tenant's state must not fail the build
+        # and must not stage anything. The skip line names what it checked --
+        # the directory and the variable naming it -- rather than guessing a host.
+        with tempfile.TemporaryDirectory() as raw:
+            missing = Path(raw) / "no-such-state"
+            out = io.StringIO()
+            with mock.patch.dict(os.environ, {"AC_STATE": str(missing)}), mock.patch.object(
+                pending_deploy, "sync_tree"
+            ) as sync, contextlib.redirect_stdout(out):
+                self.assertEqual(ci_queue_prod.main(), 0)
+            sync.assert_not_called()
+            self.assertFalse(missing.exists())
+        self.assertIn(f"skip queue-prod: {missing} (AC_STATE) is not a directory", out.getvalue())
 
 
 if __name__ == "__main__":
