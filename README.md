@@ -48,7 +48,7 @@ Host arcade-box
   IdentitiesOnly yes
 ```
 
-`scripts/bootstrap_ssh.py` is the pre-homelab bootstrap (pubkey over the installer's password login, pull `hardware-configuration.nix`, write `hosts/ac-box/ssh-keys.local.nix`); the tar-and-switch steps that followed it here left with the host config on 8 Sep 2026 (`40e9f48`). Its alias is `arcade-box` now, but its key file sits under a directory this tree no longer has, so it does not run past `--install-only`. History, not a deploy path.
+`scripts/bootstrap_ssh.py`, the pre-homelab bootstrap (pubkey over the installer's password login, pull `hardware-configuration.nix`, write `hosts/ac-box/ssh-keys.local.nix` here), was retired on 28 Sep 2026. It wrote into `hosts/ac-box/`, which left this tree with the host config on 8 Sep 2026 (`40e9f48`), so from then on no mode of it ran to the end. Each of its steps belongs to homelab now: the key list is its `hosts/<host>/ssh-keys.local.nix`, the hardware config is fetched into `hosts/<host>/` with `scp` and tracked, and with password ssh off there is no installer login left to use. A new host's first key goes on by hand, the way arcade-box's did (homelab `docs/runbook-arcade-box-cutover.md`, 0.1). The block above is the `~/.ssh/config` entry the script used to write.
 
 Copy `content/` separately when you want the tracks on the box (Brainerd is large).
 

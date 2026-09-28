@@ -37,7 +37,7 @@ The loopback-only services need no work. The whole job is the four rows above th
 Only two consumers, confirmed in [`../scripts/settings.py`](../scripts/settings.py):
 
 - `unifi_fwd_ip()` — `UNIFI_FWD_IP` **or** `AC_BOX_HOST` as fallback
-- `bootstrap_ssh.py --host` default
+- `bootstrap_ssh.py --host` default (the script was retired 28 Sep 2026)
 
 Player-facing join links come from `join_url()`, which uses `public_ip()` (`AC_PUBLIC_IP`, the WAN address) and never `box_host()`. So the `.env` split in §6 cannot break CM join links or the player page — the only exposure is port forwards.
 

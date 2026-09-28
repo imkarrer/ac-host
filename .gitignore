@@ -17,6 +17,9 @@ dist/*.zip
 dist/content.json
 dist/site/
 _extract/
+# Written into the pre-homelab hosts/ac-box/ (gone since 40e9f48) by the
+# retired scripts/bootstrap_ssh.py. Still ignored so an old checkout's copies
+# are never committed; homelab tracks each host's own.
 hosts/ac-box/ssh-keys.local.nix
 hosts/ac-box/hardware-configuration.nix
 site/.git/

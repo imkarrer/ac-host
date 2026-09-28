@@ -284,7 +284,7 @@ That must exit 0 for every account you rely on. If it prompts or fails, fix `ssh
 
 Put `boot.loader.timeout` back to a finite value (5 is the NixOS default) so an unattended reboot comes back up on its own. If you used `null` in Step 2, this matters — leaving it parks the box at the menu after any power blip.
 
-Then update the places encoding the old single-address assumption: `README.md` "NixOS box" section, `compose/env.example` comments for `AC_BOX_HOST` and `UNIFI_FWD_IP`, and the `--host` default in `scripts/bootstrap_ssh.py`. Drop the now-dead `"networkmanager"` entry from `users.users.nixosuser.extraGroups` (harmless either way — nonexistent `extraGroups` entries are silently ignored, so this is tidying, not a fix). Optionally move deploys to `nixos-rebuild --target-host` over the management address.
+Then update the places encoding the old single-address assumption: `README.md` "NixOS box" section, `compose/env.example` comments for `AC_BOX_HOST` and `UNIFI_FWD_IP`, and the `--host` default in `scripts/bootstrap_ssh.py` (retired 28 Sep 2026; nothing to update there now). Drop the now-dead `"networkmanager"` entry from `users.users.nixosuser.extraGroups` (harmless either way — nonexistent `extraGroups` entries are silently ignored, so this is tidying, not a fix). Optionally move deploys to `nixos-rebuild --target-host` over the management address.
 
 ---
 
