@@ -1,7 +1,12 @@
-# Buildkite agent on ac-box. Ubuntu+Flox image from the plugin Dockerfile,
-# plus a loopback-only MinIO Nix binary cache. Jobs write /var/lib/ac-host
-# and recycle via the host Docker socket. No SSH. Do not publish 9000/9001
-# off localhost.
+# Buildkite agent on arcade-box: since 26 Sep 2026 (homelab ADR 0010) the only
+# agent, queue=self; until then it ran on the Z840. Ubuntu+Flox image from the
+# plugin Dockerfile, plus a loopback-only MinIO Nix binary cache. Jobs write
+# /var/lib/ac-host and recycle via the host Docker socket. No SSH. Do not
+# publish 9000/9001 off localhost.
+#
+# On the box, homelab's ac-host-ci.service runs this file (modules/ci there)
+# with the sops-rendered /run/secrets/rendered/ci-env as its --env-file. By
+# hand, on a host without that unit:
 #
 #   cp compose/env.buildkite.example compose/.env.buildkite
 #   # paste token + cache secrets (see docs/ci-cd.md)
@@ -9,12 +14,11 @@
 #
 # First image build is heavy (flox + SEED_PACKAGES). Keep it off race night.
 #
-# CPU FENCING (cgroup_parent, below)
+# CPU/MEMORY FENCING (cgroup_parent, below)
 #
 # Every service here sets `cgroup_parent: batch.slice`, the slice homelab's
-# tenant contract creates for the batch tier. Without it a Nix build in this
-# agent can take all 56 threads, including the cores the live race servers run
-# on -- verified: the agent's effective cpuset was 0-55.
+# tenant contract creates for the batch tier. Without it dockerd puts these
+# containers in system.slice, under no tier's weight or ceiling.
 #
 # It has to be set HERE, on the containers, and cannot be solved by wrapping
 # this stack in a systemd unit. Container cgroup placement is decided by
@@ -22,33 +26,58 @@
 # started from an SSH session (user.slice) yet land in system.slice, as
 # siblings of any invoking unit rather than children of its slice.
 #
-# Verified on ac-box (systemd cgroup driver, cgroup v2):
-#   docker run --rm --cgroup-parent=batch.slice alpine cat \
-#     /sys/fs/cgroup/cpuset.cpus.effective   ->  28-55
-#   docker run --rm                   alpine ... same path  ->  0-55
+# ON ARCADE-BOX (i7-8700T, 6 cores / 12 threads, 31 GiB declared) batch.slice
+# is weighted and capped, not fenced. homelab sets no AllowedCPUs on this host
+# (hosts/arcade-box/configuration.nix, "no cpuset fence", ADR 0010): a fence
+# carved out of six cores would sit idle most of the day. So a build sees
+# every CPU, competes by CPUWeight -- batch 300 against the lobbies' 500 in
+# critical.slice, consulted only under contention -- and MemoryMax is the hard
+# limit: the tier's 0.45 memoryShare of declared capacity, in whole MiB
+# (homelab's modules/tenant/resources.nix),
 #
-# The 28-55 above is the value that WAS observed, and it turned out to be a bug
-# in homelab rather than a sane fence: on this box CPUs 28-55 are the SMT
-# siblings of 0-27, one per physical core, so batch was not separated from the
-# race servers at all -- it was given the second thread of every core they ran
-# on. homelab now computes the fence in physical cores, and batch has its own
-# block rather than sharing background's. Expect roughly "26-27,54-55" here;
-# re-run the check above rather than trusting either number.
+#   floor(0.45 x 31 GiB x 1024) = floor(14284.8) = 14284 MiB
+#                               = 14977859584 bytes, ~13.9 GiB,
 #
-# batch.slice also carries MemoryMax, derived from the tier's share of declared
-# capacity: 12.5 GiB on ac-box since the share went to 0.05 (it was ~25 GiB at
-# 0.10; the difference went to background for klein 9B). If a build ever OOMs,
-# the share in homelab's hosts/<host>/host.nix is one number to revisit -- but
-# not the first. One did OOM, 17 Sep 2026: agent-hub build 6 compiled the
-# ik_llama.cpp fork under the flox plugin, ninja ran `-j4` because the
-# container's nproc is 4 (batch's two physical cores plus their SMT siblings),
-# and four cc1plus on the fork's iqk template units hit the ceiling exactly
-# (MemoryPeak == MemoryMax; `g++: fatal error: Killed signal terminated
-# program cc1plus`). homelab's tier comment already assumed "the agent's builds
-# run -j2 on two cores"; `cores = 2` in NIX_CONFIG below makes that true
-# (nix passes it as NIX_BUILD_CORES, which ninja and make honour), so a build
-# uses the two cores it owns and half the memory, rather than the model
-# server's ceiling being cut to fit a compile.
+# shared by this stack (agent, MinIO) and the host's nix-daemon. Read live 28
+# Sep 2026: `systemctl show batch.slice -p MemoryMax` -> 14977859584,
+# CPUWeight 300, AllowedCPUs empty; the agent's cpuset.cpus.effective 0-11;
+# memory.events oom_kill 0 since the slice came up on 26 Sep. If a build ever
+# OOMs, the share in homelab's hosts/<host>/configuration.nix is one number to
+# revisit -- but not the first: `cores = 2` below is.
+#
+# ON THE Z840 (the agent's host until 26 Sep 2026; 28 cores / 56 threads)
+# batch WAS fenced, and what that taught is kept here:
+#
+#   Without cgroup_parent a Nix build in this agent could take all 56 threads,
+#   including the cores the race servers ran on -- the agent's effective
+#   cpuset was 0-55. Verified there (systemd cgroup driver, cgroup v2):
+#     docker run --rm --cgroup-parent=batch.slice alpine cat \
+#       /sys/fs/cgroup/cpuset.cpus.effective   ->  28-55
+#     docker run --rm                   alpine ... same path  ->  0-55
+#   The 28-55 turned out to be a bug in homelab rather than a sane fence: CPUs
+#   28-55 were the SMT siblings of 0-27, one per physical core, so batch was
+#   given the second thread of every core the race servers ran on. homelab now
+#   computes a fence in physical cores, with batch in its own block, on a host
+#   that has one.
+#
+#   batch's MemoryMax there was 12.5 GiB at a 0.05 share (~25 GiB at 0.10; the
+#   difference went to background for klein 9B), and a build did OOM, 17 Sep
+#   2026: agent-hub build 6 compiled the ik_llama.cpp fork under the flox
+#   plugin, ninja ran `-j4` because the container's nproc was 4 (batch's two
+#   physical cores plus their SMT siblings), and four cc1plus on the fork's iqk
+#   template units hit the ceiling exactly (MemoryPeak == MemoryMax; `g++:
+#   fatal error: Killed signal terminated program cc1plus`). homelab's tier
+#   comment already assumed "the agent's builds run -j2 on two cores";
+#   `cores = 2` in NIX_CONFIG below made that true (nix passes it as
+#   NIX_BUILD_CORES, which ninja and make honour), so a build used the two
+#   cores it owned and half the memory, rather than the model server's ceiling
+#   being cut to fit a compile.
+#
+# `cores = 2` stays on arcade-box for the memory half of that reason. With no
+# fence the agent's cpuset is 0-11, so a build left to nproc would run twelve
+# compilers under the same ~13.9 GiB. homelab sized batch here on the Z840's
+# record -- its 12.5 GiB held every build at cores = 2 (hosts/arcade-box/
+# configuration.nix, batch) -- and that record is for two compilers.
 #
 # cgroup_parent applies at container CREATION. Existing containers keep their
 # old placement until recreated, and recreating the agent kills the process that
@@ -63,12 +92,13 @@
 # Nix's namespace probe fails and Nix silently (debug level) builds without a
 # sandbox -- as root, on this container's real filesystem, with
 # HOME=/homeless-shelter. ac-host's own pipeline never noticed because it
-# evaluates without building. homelab's flake check builds the whole ac-box
-# toplevel, and the first ones ever (14 Sep 2026, builds 2 and 3) hit a Go
-# program in the closure that no cache had (sops-install-secrets): Go 1.25's
-# telemetry created /homeless-shelter/.config/go/telemetry, and Nix refuses
-# every later unsandboxed build while that directory exists. Cleared by hand,
-# build 3 recreated it in 28 s.
+# evaluates without building. homelab's flake check builds each host's whole
+# toplevel (in mid-September the Z840's, the only host then), and the first
+# ones ever (14 Sep 2026, builds 2 and 3) hit a Go program in the closure that
+# no cache had (sops-install-secrets): Go 1.25's telemetry created
+# /homeless-shelter/.config/go/telemetry, and Nix refuses every later
+# unsandboxed build while that directory exists. Cleared by hand, build 3
+# recreated it in 28 s.
 #
 # Two settings, and both are needed:
 #
@@ -87,13 +117,15 @@
 #                                       /root and no /nix/var, and its write
 #                                       to $HOME is refused
 #     privileged                     -> same as the line above
-#   ON AC-BOX ITSELF (14 Sep 2026, this image: flox-bundled Nix 2.31.5, Docker
-#   29.7.2, NixOS 26.05 kernel) the table is shorter: seccomp=unconfined, and
-#   seccomp=unconfined + cap_add SYS_ADMIN, BOTH still fail with "does not
-#   support the kernel namespaces"; only privileged engages the sandbox. Proven
-#   with throwaway `docker run --rm` containers of this very image and a
-#   one-line derivation, sandbox-fallback = false. So: privileged, decided by
-#   the operator 14 Sep. It also unmasks /proc and hands over host devices,
+#   ON THE Z840 ITSELF, the agent's host until 26 Sep 2026 (14 Sep 2026, this
+#   image: flox-bundled Nix 2.31.5, Docker 29.7.2, NixOS 26.05 kernel), the
+#   table was shorter: seccomp=unconfined, and seccomp=unconfined + cap_add
+#   SYS_ADMIN, BOTH still failed with "does not support the kernel
+#   namespaces"; only privileged engaged the sandbox. Proven with throwaway
+#   `docker run --rm` containers of this very image and a one-line derivation,
+#   sandbox-fallback = false. So: privileged, decided by the operator 14 Sep;
+#   arcade-box took it over with this file, and the narrower sets have not
+#   been re-tried there. It also unmasks /proc and hands over host devices,
 #   which Nix did not ask for -- but not new privilege: the container already
 #   mounts /var/run/docker.sock, which is root on the host.
 #
@@ -192,8 +224,8 @@ services:
     restart: unless-stopped
     user: "0:0"
     # NIX SANDBOX (header above): let Nix create the namespaces its sandbox is
-    # made of. On ac-box only privileged does; the narrower sets are in the
-    # header with the error each one gave.
+    # made of. On the Z840 only privileged did (not re-tried on arcade-box);
+    # the narrower sets are in the header with the error each one gave.
     privileged: true
     depends_on:
       minio-init:
@@ -201,13 +233,17 @@ services:
     environment:
       BUILDKITE_AGENT_TOKEN: ${BUILDKITE_AGENT_TOKEN:?set BUILDKITE_AGENT_TOKEN}
       BUILDKITE_AGENT_TAGS: ${BUILDKITE_AGENT_TAGS:-queue=self}
-      BUILDKITE_AGENT_NAME: ${BUILDKITE_AGENT_NAME:-ac-box}
+      # The box's value comes from the env file: homelab renders
+      # BUILDKITE_AGENT_NAME=<homelab.host.name> into ci-env
+      # (modules/platform/secrets.nix), `arcade-box` there. This default only
+      # names an agent brought up by hand without that file.
+      BUILDKITE_AGENT_NAME: ${BUILDKITE_AGENT_NAME:-arcade-box}
       # NIX SANDBOX (header above). sandbox = true is already the Linux
       # default; sandbox-fallback = false is the fix, so a sandbox that cannot
       # engage fails the job instead of building as root on this filesystem.
-      # cores = 2: the CPU FENCING header, last paragraph -- a build gets the
-      # two physical cores batch owns, not their siblings as well, and the
-      # memory that goes with two compilers rather than four.
+      # cores = 2: the CPU/MEMORY FENCING header -- two compilers per build.
+      # On the Z840 that was the two physical cores batch owned; on arcade-box,
+      # with no fence, it is what keeps a build's memory inside batch.slice.
       NIX_CONFIG: |
         sandbox = true
         sandbox-fallback = false
