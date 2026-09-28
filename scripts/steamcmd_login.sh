@@ -1,5 +1,6 @@
 #!/bin/sh
-# One-time SteamCMD login on ac-box. Run from an SSH session (not docker -d).
+# One-time SteamCMD login on arcade-box, the racing box. Run from an SSH
+# session (not docker -d).
 # Usage: sudo /var/lib/ac-host/src/scripts/steamcmd_login.sh YOUR_STEAM_USERNAME
 set -eu
 USER="${1:?steam username}"

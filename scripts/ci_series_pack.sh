@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Bake numbered skins + publish the CM zip. Runs on ac-box (content + KN5s).
+# Bake numbered skins + publish the CM zip. Runs on arcade-box's agent, where
+# the content and KN5s are.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"

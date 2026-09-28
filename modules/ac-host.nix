@@ -56,8 +56,8 @@ in
       description = ''
         NIC the lobby ports are opened on. The openings below are scoped to this
         interface rather than global, so a second NIC does not inherit them --
-        ac-box's dual-NIC plan would otherwise have exposed every lobby HTTP and
-        details port on a management link the moment it came up.
+        the Z840's dual-NIC plan would otherwise have exposed every lobby HTTP
+        and details port on a management link the moment it came up.
 
         External drivers are unaffected: unifi_pf.py forwards to this box's LAN
         address, so forwarded traffic ingresses here and still matches.

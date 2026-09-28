@@ -1,7 +1,8 @@
 # CI only. GitHub push/PR → this file (default pipeline upload).
 # Ops and series are sibling pipelines; they cannot recycle from a push.
 #
-# Agent on ac-box. Queue=self. MinIO cache at http://minio:9000.
+# Agent on arcade-box (the only one since 26 Sep 2026). Queue=self. MinIO
+# cache at http://minio:9000.
 
 agents:
   queue: self

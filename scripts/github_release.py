@@ -1,8 +1,8 @@
 """Upload release assets with a token instead of the `gh` CLI.
 
-`publish_cars.py` shells out to `gh`, which is fine on a workstation. ac-box has
-no `gh` and no interactive login, so the server-side publish path talks to the
-REST API directly with a token from disk. Only urllib, so this works inside the
+`publish_cars.py` shells out to `gh`, which is fine on a workstation. The racing
+box (arcade-box) has no `gh` and no interactive login, so the server-side
+publish path talks to the REST API directly with a token from disk. Only urllib, so this works inside the
 slim bot image too.
 """
 
@@ -23,7 +23,7 @@ DEFAULT_TOKEN_FILE = "/var/lib/ac-host/secrets/github-token"
 
 
 def load_token(explicit: str = "") -> str:
-    """Token from an argument, the environment, or the secrets file on ac-box."""
+    """Token from an argument, the environment, or the secrets file on the box."""
     if explicit.strip():
         return explicit.strip()
     env = os.environ.get(TOKEN_ENV, "").strip()

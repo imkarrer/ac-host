@@ -7,11 +7,14 @@ Status push writes `dev/leaderboard.json` in the same `ac-practice` repo (not a 
 
 ## One-time on the box
 
+The dev unit is already declared: homelab's `hosts/arcade-box/configuration.nix` sets `services.ac-host-dev.enable = true`, so arcade-box has `ac-host-dev.service`, loaded and not started. What it still needs is its env file (absent as of 28 Sep 2026):
+
 ```bash
 sudo cp /var/lib/ac-host/src/compose/env.dev.example /var/lib/ac-host-dev/.env
 # Edit AC_ADMIN_PASSWORD if needed.
-sudo nixos-rebuild switch --flake /var/lib/ac-host/src#ac-box
 ```
+
+There is nothing to rebuild from this tree: it has no `nixosConfigurations`, and the host is homelab's. Declaring the unit on another host is a change to that host's `hosts/<host>/configuration.nix` in homelab, which homelab's pipeline stages and `homelab-deploy` switches. When a hand switch is needed, it is `nixos-rebuild switch --flake github:imkarrer/homelab/<full-sha>#arcade-box`, from a sha already on origin.
 
 Seed status-push (same `gh` token as prod; different path):
 
@@ -19,7 +22,7 @@ Seed status-push (same `gh` token as prod; different path):
 gh auth token | sudo AC_STATE=/var/lib/ac-host-dev python3 /var/lib/ac-host/src/scripts/seed_github_env.py --env dev
 ```
 
-`services.ac-host-dev.enable = true` in the host config registers the unit but does **not** add it to `multi-user.target` — start it manually.
+`services.ac-host-dev.enable = true` in homelab's host config registers the unit but does **not** add it to `multi-user.target` — start it manually.
 
 ## Start / stop dev only
 

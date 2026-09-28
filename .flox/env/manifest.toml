@@ -2,7 +2,7 @@ schema-version = "1.16.0"
 
 # This one manifest is three things: the developer's shell (`flox activate`),
 # the CI gate (.buildkite/pipeline.yml runs every step under the flox plugin),
-# and the runtime image the bot and sidecars run from on ac-box --
+# and the runtime image the bot and sidecars run from on arcade-box --
 # scripts/ci_containerize.sh turns it into `ac-host-env:<sha>` with
 # `flox containerize`, and compose/docker-compose.yml runs that image with this
 # tree bind-mounted at /repo. Adding a package here is adding it to prod.

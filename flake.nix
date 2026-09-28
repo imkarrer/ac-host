@@ -12,10 +12,10 @@
     {
       # This repo is a TENANT. It is no longer a host configuration.
       #
-      # ac-box's system closure is built by github:imkarrer/homelab, which owns
-      # the platform layer, the tenant contract and hosts/ac-box/. Three things
-      # that used to live here have gone, and each was a duplicate of something
-      # homelab now owns:
+      # The racing box's system closure is built by github:imkarrer/homelab,
+      # which owns the platform layer, the tenant contract and the host itself
+      # (hosts/arcade-box/ since 26 Sep 2026). Three things that used to live
+      # here have gone, and each was a duplicate of something homelab now owns:
       #
       #   nixosConfigurations.ac-box  A rebuild from this flake produced a system
       #                               with no platform layer, no tenant contract

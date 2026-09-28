@@ -5,7 +5,7 @@ Run INSIDE ac-host-env by scripts/ci_containerize.sh, with this tree copied to
 /repo (the path the manifest's [profile] builds PYTHONPATH from via AC_REPO),
 the same way compose bind-mounts it in prod. A package missing from
 .flox/env/manifest.toml then fails in CI, in the image that would have
-shipped, rather than on ac-box at 03:00. Imports every module a compose
+shipped, rather than on arcade-box at 03:00. Imports every module a compose
 ``command:`` starts, plus what the bot shells out to
 (scripts/generate_series_liveries.py: numpy, scipy, Pillow and a scalable
 font), and reports the Python and the font that resolved.

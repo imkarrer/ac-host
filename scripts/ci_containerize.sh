@@ -15,9 +15,9 @@
 # ran under (the plugin activates it), so the closure that ships is the
 # closure that was tested, and the box never assembles a runtime at 03:00 --
 # `docker compose up --build` used to pull python:3.12-slim and pip-install
-# from PyPI in the window. This agent runs ON ac-box with /var/run/docker.sock
-# mounted, so `--runtime docker` lands the image exactly where compose looks
-# for it; no registry, no MinIO push, no pull.
+# from PyPI in the window. This agent runs ON the racing box (arcade-box) with
+# /var/run/docker.sock mounted, so `--runtime docker` lands the image exactly
+# where compose looks for it; no registry, no MinIO push, no pull.
 #
 # The code is not in the image; compose bind-mounts the tree at /repo. The
 # smoke test below therefore mounts nothing: the checkout lives on a docker

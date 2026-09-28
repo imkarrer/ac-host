@@ -1,6 +1,7 @@
 # CI/CD (Buildkite + Flox)
 
-The Buildkite **agent runs on ac-box**. Jobs write files under
+The Buildkite **agent runs on arcade-box**, the only agent (queue `self`)
+since 26 Sep 2026; before that it ran on the Z840. Jobs write files under
 `/var/lib/ac-host`. They do **not** SSH. Green `main` only **queues** a
 tree. The Discord countdown at mark 0 queues **`ac-host-ops`** with
 `DOWNTIME=1`, which applies that tree and recycles practice. Last
@@ -9,9 +10,9 @@ tree. The Discord countdown at mark 0 queues **`ac-host-ops`** with
 Nix inside the agent builds **sandboxed**. The compose file runs the
 agent `privileged` (Docker's default profile denies the namespace
 syscalls the sandbox is made of, so Nix quietly built as root on the
-container's filesystem until 14 Sep 2026; on ac-box neither `seccomp=unconfined`
-nor `SYS_ADMIN` was enough, only `privileged` -- the compose header has the
-table) and sets `NIX_CONFIG`
+container's filesystem until 14 Sep 2026; on the Z840, where the agent then
+ran, neither `seccomp=unconfined` nor `SYS_ADMIN` was enough, only
+`privileged` -- the compose header has the table) and sets `NIX_CONFIG`
 to `sandbox-fallback = false`, so a sandbox that cannot engage fails the
 job loudly instead. The `NIX SANDBOX` section in
 `compose/docker-compose.buildkite.yml` has the mechanism and the tests.
@@ -47,7 +48,7 @@ Not jobs (on purpose):
 | Step | Owner |
 | --- | --- |
 | Signup / quali / race start / grid lock | Discord `/admin` + `acctl` on the box |
-| `nixos-rebuild` | Manual, empty lobby only |
+| `nixos-rebuild` | homelab: its pipeline stages the closure and `homelab-deploy` on arcade-box switches it, deferring while drivers are racing (homelab ADR 0008) |
 | Series race container | Still `acctl start-race` until `start-series` exists |
 
 ## Why no SSH
@@ -83,7 +84,12 @@ the old Apply-now block; do not Unblock them.
 
    Existing `ac-host` stays the CI pipeline. Ops and series must not use
    the default upload path or a push will run the wrong file.
-3. On **ac-box**, start the Flox agent image **and** the loopback MinIO cache:
+3. On the racing box, start the Flox agent image **and** the loopback MinIO
+   cache. On **arcade-box** homelab's `ac-host-ci.service` does this
+   (`modules/ci` there), passing the sops-rendered
+   `/run/secrets/rendered/ci-env` instead of `.env.buildkite`. Do not also
+   run it by hand there (HAZARD 1 in that module). By hand, on a host
+   without the unit:
 
    ```bash
    cp compose/env.buildkite.example compose/.env.buildkite
