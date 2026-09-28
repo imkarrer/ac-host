@@ -1,4 +1,4 @@
-"""Queue a prod tree for the 03:00 recycle. No SSH — files live on the racing box.
+"""Queue a prod tree for the 03:00 recycle. No SSH — files live on arcade-box.
 
 Buildkite (agent on the box) writes ``pending-deploy.json`` + ``pending-src/``.
 The bot's 03:00 countdown queues ``DOWNTIME=1``, which applies that tree

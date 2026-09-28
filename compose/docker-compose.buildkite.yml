@@ -4,7 +4,7 @@
 # /var/lib/ac-host and recycle via the host Docker socket. No SSH. Do not
 # publish 9000/9001 off localhost.
 #
-# On the box, homelab's ac-host-ci.service runs this file (modules/ci there)
+# On arcade-box, homelab's ac-host-ci.service runs this file (modules/ci there)
 # with the sops-rendered /run/secrets/rendered/ci-env as its --env-file. By
 # hand, on a host without that unit:
 #
@@ -41,7 +41,9 @@
 # shared by this stack (agent, MinIO) and the host's nix-daemon. Read live 28
 # Sep 2026: `systemctl show batch.slice -p MemoryMax` -> 14977859584,
 # CPUWeight 300, AllowedCPUs empty; the agent's cpuset.cpus.effective 0-11;
-# memory.events oom_kill 0 since the slice came up on 26 Sep. If a build ever
+# memory.events oom_kill 0 since the slice came up on 26 Sep -- but max 4664 and
+# memory.peak at the ceiling: builds do reach it, mostly as page cache the
+# kernel reclaims (~6.0 of ~7.8 GB current was file cache). If a build ever
 # OOMs, the share in homelab's hosts/<host>/configuration.nix is one number to
 # revisit -- but not the first: `cores = 2` below is.
 #
@@ -233,7 +235,7 @@ services:
     environment:
       BUILDKITE_AGENT_TOKEN: ${BUILDKITE_AGENT_TOKEN:?set BUILDKITE_AGENT_TOKEN}
       BUILDKITE_AGENT_TAGS: ${BUILDKITE_AGENT_TAGS:-queue=self}
-      # The box's value comes from the env file: homelab renders
+      # arcade-box's value comes from the env file: homelab renders
       # BUILDKITE_AGENT_NAME=<homelab.host.name> into ci-env
       # (modules/platform/secrets.nix), `arcade-box` there. This default only
       # names an agent brought up by hand without that file.

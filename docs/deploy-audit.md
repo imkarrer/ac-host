@@ -341,7 +341,9 @@ across `shared/`, `scripts/`, `sidecar/`, `bot/`:
   machine than usual would silently drop any key manually added by someone
   else. Not part of the automated pipeline, so left as a note rather than a
   fix. *Retired 28 Sep 2026 (homelab-ygc.19): once `hosts/ac-box/` left this
-  tree (8 Sep) no mode of it ran to the end, and homelab owns both files.*
+  tree (8 Sep) no mode of it completed -- `--install-only` still copied and
+  verified a key, then failed writing the hardware config -- and homelab owns
+  both files.*
 - **`sidecar/auth.py`**: only writes `whitelist.json` with `{"players": []}`
   when the file **does not already exist** (`if not whitelist.is_file()`) —
   cannot clobber an existing whitelist.

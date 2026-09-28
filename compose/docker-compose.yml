@@ -35,7 +35,9 @@
 # Sep 2026: `systemctl show critical.slice -p MemoryMax` -> 6656360448,
 # CPUWeight 500, AllowedCPUs empty; memory.peak ~2.5 GiB since the slice came
 # up on 26 Sep, and never at the ceiling (memory.events max 0). On the Z840 it
-# was ~25 GiB. If a lobby ever OOMs, the number to revisit is the tier share in
+# was ~25 GiB (0.10 of 251 GiB) until 14 Sep 2026, then ~5 GiB (0.02, homelab
+# 70eb2c8) to the cutover, under the same ~2.5 GiB peak. If a lobby ever
+# OOMs, the number to revisit is the tier share in
 # homelab's hosts/<host>/configuration.nix (capacity in host.nix), not this
 # file.
 #

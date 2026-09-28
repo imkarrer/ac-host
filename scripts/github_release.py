@@ -23,7 +23,7 @@ DEFAULT_TOKEN_FILE = "/var/lib/ac-host/secrets/github-token"
 
 
 def load_token(explicit: str = "") -> str:
-    """Token from an argument, the environment, or the secrets file on the box."""
+    """Token from an argument, the environment, or DEFAULT_TOKEN_FILE on arcade-box."""
     if explicit.strip():
         return explicit.strip()
     env = os.environ.get(TOKEN_ENV, "").strip()

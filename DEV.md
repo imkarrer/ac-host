@@ -14,7 +14,7 @@ sudo cp /var/lib/ac-host/src/compose/env.dev.example /var/lib/ac-host-dev/.env
 # Edit AC_ADMIN_PASSWORD if needed.
 ```
 
-There is nothing to rebuild from this tree: it has no `nixosConfigurations`, and the host is homelab's. Declaring the unit on another host is a change to that host's `hosts/<host>/configuration.nix` in homelab, which homelab's pipeline stages and `homelab-deploy` switches. When a hand switch is needed, it is `nixos-rebuild switch --flake github:imkarrer/homelab/<full-sha>#arcade-box`, from a sha already on origin.
+There is nothing to rebuild from this tree: it has no `nixosConfigurations`, and the host is homelab's. Declaring the unit on another host is a change to that host's `hosts/<host>/configuration.nix` in homelab, which homelab's pipeline stages and `homelab-deploy` switches. arcade-box takes no hand switch: homelab's `hosts/arcade-box/configuration.nix` records the cutover switch as its last.
 
 Seed status-push (same `gh` token as prod; different path):
 
