@@ -1,8 +1,20 @@
 # Buildkite agent on arcade-box: since 26 Sep 2026 (homelab ADR 0010) the only
 # agent, queue=self; until then it ran on the Z840. Ubuntu+Flox image from the
-# plugin Dockerfile, plus a loopback-only MinIO Nix binary cache. Jobs write
-# /var/lib/ac-host and recycle via the host Docker socket. No SSH. Do not
-# publish 9000/9001 off localhost.
+# plugin Dockerfile. Jobs write /var/lib/ac-host and recycle via the host
+# Docker socket. No SSH.
+#
+# THE NIX BINARY CACHE is wherever S3_CACHE_ENDPOINT points: the agent's build
+# arg (the substituter baked into its image) and its environment (what the
+# flox plugin reads; no pipeline names the cache). Unset, as homelab's ci-env
+# leaves it today, both are http://minio:9000 -- the loopback-only MinIO
+# below; do not publish 9000/9001 off localhost. homelab ADR 0013 moves the
+# cache to Garage, a native service on this host; its switch is ci-env
+# setting S3_CACHE_ENDPOINT=http://flox-binary-cache:3900 with Garage's key.
+# For that, the agent's extra_hosts maps the name to the host, the project's
+# bridge has the fixed name homelab opens 3900 on and nowhere else
+# (networks, at the end), and minio-init is no longer handed the key pair,
+# so MinIO never stores Garage's. Like every change to this file, none of
+# it is live until ac-host-ci next starts: a restart from ssh, or a boot.
 #
 # On arcade-box, homelab's ac-host-ci.service runs this file (modules/ci there)
 # with the sops-rendered /run/secrets/rendered/ci-env as its --env-file. By
@@ -143,10 +155,12 @@
 #   its environment to jobs (how S3_CACHE_* reaches the plugin hook today).
 #   The plugin sets no NIX_CONFIG of its own, so nothing overwrites it.
 #
-# The flake check builds the full toplevel on this agent. Once the MinIO cache
-# holds paths signed by flox-binary-cache-2 that is mostly substitution; the
-# first builds after this lands compile whatever the cache lacks, sandboxed,
-# and S3_CACHE_PUSH writes it back.
+# homelab's flake check builds each host's full toplevel on this agent. What
+# the cache (THE NIX BINARY CACHE, top) holds, signed flox-binary-cache-1 or
+# -2, it substitutes through the image's baked substituter; the rest it
+# compiles, sandboxed. It writes nothing back: its steps carry no flox
+# plugin, and the plugin's post-command hook is the cache's only writer
+# (S3_CACHE_PUSH).
 #
 # If the "kernel namespaces" error ever appears with this in place, the
 # follow-up is privileged: true (verified above) -- never sandbox-fallback =
@@ -193,12 +207,17 @@ services:
       minio:
         condition: service_started
     restart: "no"
+    # Not the cache's key pair, S3_CACHE_ACCESS_KEY_ID and
+    # S3_CACHE_SECRET_ACCESS_KEY: from homelab ADR 0013's switch they carry
+    # Garage's key, which MinIO must never see or store. Without them
+    # minio-init.sh skips its `user add` (it guards on both), and the
+    # flox-cache user every earlier start made keeps the secret MinIO holds
+    # -- the one the agent presents until the switch. The render's refusal
+    # of a missing pair moved with them, to the agent's AWS_* below.
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       S3_CACHE_BUCKET: ${S3_CACHE_BUCKET:-flox-binary-cache}
-      S3_CACHE_ACCESS_KEY_ID: ${S3_CACHE_ACCESS_KEY_ID:?set S3_CACHE_ACCESS_KEY_ID}
-      S3_CACHE_SECRET_ACCESS_KEY: ${S3_CACHE_SECRET_ACCESS_KEY:?set S3_CACHE_SECRET_ACCESS_KEY}
     volumes:
       - ./minio-init.sh:/minio-init.sh:ro
     entrypoint: ["/bin/sh", "/minio-init.sh"]
@@ -217,7 +236,11 @@ services:
         # operator's WSL -- move before any manifest's schema-version does.
         FLOX_VERSION: ${FLOX_VERSION:-1.16.0}
         S3_CACHE_BUCKET: ${S3_CACHE_BUCKET:-flox-binary-cache}
-        S3_CACHE_ENDPOINT: http://minio:9000
+        # The same variable and default as the agent's environment below, so
+        # the baked substituter follows homelab's ci-env at the image's next
+        # build (every start of ac-host-ci builds it) and stays today's
+        # http://minio:9000 until ci-env sets it.
+        S3_CACHE_ENDPOINT: ${S3_CACHE_ENDPOINT:-http://minio:9000}
         S3_CACHE_REGION: us-east-1
         S3_CACHE_PUBLIC_KEY: "flox-binary-cache-1:pSpP6x540XtBh+IMvmW8XrRHJDtIi+b31uvvIA0PyR0= flox-binary-cache-2:ESa71iIsMeX6Wu7EBiXXZlJraWI0HF4xdOF/ivG4UTo="
         # Same pkg-paths the ac-host Flox env uses (no unused gh).
@@ -232,6 +255,14 @@ services:
     depends_on:
       minio-init:
         condition: service_completed_successfully
+    # THE NIX BINARY CACHE (header): Garage's name, for when ci-env points
+    # S3_CACHE_ENDPOINT at it. host-gateway is dockerd's address for the host
+    # (docker0's 172.17.0.1); a packet to it leaves on this project's bridge
+    # and is delivered to the host itself, where homelab's modules/ci opens
+    # 3900 on that bridge alone (networks, at the end). Nothing asks for the
+    # name while the endpoint is minio:9000.
+    extra_hosts:
+      - "flox-binary-cache:host-gateway"
     environment:
       BUILDKITE_AGENT_TOKEN: ${BUILDKITE_AGENT_TOKEN:?set BUILDKITE_AGENT_TOKEN}
       BUILDKITE_AGENT_TAGS: ${BUILDKITE_AGENT_TAGS:-queue=self}
@@ -286,8 +317,10 @@ services:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: url.https://x-access-token:${BUILDKITE_CLONE_TOKEN:-}@github.com/imkarrer/inquire-platform.insteadOf
       GIT_CONFIG_VALUE_0: https://github.com/imkarrer/inquire-platform
-      AWS_ACCESS_KEY_ID: ${S3_CACHE_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${S3_CACHE_SECRET_ACCESS_KEY}
+      # The cache's write credential, required: a render without it fails
+      # here, as it failed on minio-init's copy until that went (above).
+      AWS_ACCESS_KEY_ID: ${S3_CACHE_ACCESS_KEY_ID:?set S3_CACHE_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${S3_CACHE_SECRET_ACCESS_KEY:?set S3_CACHE_SECRET_ACCESS_KEY}
       AWS_EC2_METADATA_DISABLED: "true"
       # Non-secret cache identity. The plugin reads these so pipelines
       # do not repeat s3-cache-* on every step.
@@ -317,15 +350,20 @@ services:
       # systemd that is `ac-host-ci.service` starting: a reboot, or a
       # deliberate restart from a plain SSH session. Never from a Buildkite
       # step (HAZARD 2 in homelab's modules/ci).
-      # "Changed definition" means THIS service's: compose 5.4.0 (the
-      # version on the box and in WSL) recreates a container when its own
-      # config hash or image changed, not when a dependency's did. A swap
-      # of minio's or minio-init's image above recreates those two and
-      # leaves this container running (probed 26 Sep 2026, homelab-ygc.11,
-      # with a three-service busybox stack of the same depends_on shape;
-      # `--always-recreate-deps` is the opt-in). `--build` is the other
-      # way this container moves: a new agent image ID from the plugin's
-      # #main is a recreate too.
+      # "Changed definition" means THIS service's, for an `up -d` alone:
+      # compose 5.4.0 (the version on the box and in WSL) recreates a
+      # container when its own config hash or image changed, not when a
+      # dependency's did (probed 26 Sep 2026, homelab-ygc.11, with a
+      # three-service busybox stack of the same depends_on shape;
+      # `--always-recreate-deps` is the opt-in). A restart of the unit is
+      # not that: its ExecStop is `down`, so `systemctl restart ac-host-ci`
+      # removes this container, minio's and the network, rebuilds the agent
+      # image from the plugin's #main (`--build`), and only then creates
+      # them all again -- every restart recreates the agent, whatever
+      # changed (journalctl -u ac-host-ci, 28 Sep 2026: down 04:24:11-15,
+      # the image built 04:24:19-04:29:46, the network and containers
+      # created 04:29:46-47). So a swap of minio's image, live only through
+      # such a restart, recreates the agent with it.
       - /var/lib/homelab:/var/lib/homelab
       - /var/run/docker.sock:/var/run/docker.sock
       - buildkite-builds:/buildkite/builds
@@ -352,3 +390,15 @@ volumes:
   buildkite-nix:
     name: ac-host-ci_buildkite-nix-flox-${FLOX_VERSION:-1.16.0}
   minio-data:
+
+# THE NIX BINARY CACHE (header): a fixed name for the project's bridge, so
+# homelab's modules/ci can open Garage's S3 port, 3900, on it and on no other
+# interface (homelab ADR 0013 decision 2). Unnamed, Docker calls it
+# br-<network id>, a new one at every restart of ac-host-ci (`down` removes
+# the network, `up` creates it). 13 of Linux's 15 characters. The same kind
+# of coupling as `name:` at the top: homelab's side spells this string too,
+# and a rename here alone leaves the cache unreachable from the agent.
+networks:
+  default:
+    driver_opts:
+      com.docker.network.bridge.name: br-ac-host-ci

@@ -144,13 +144,15 @@ fetching upstream. Steps only set `command` — they do not repeat
 | Public key file | `.buildkite/flox-binary-cache.pub`, one key per line | no |
 | MinIO root + cache user | homelab's sops, rendered to `/run/secrets/rendered/ci-env` on the box | yes |
 | Nix signing key | `S3_CACHE_SIGNING_KEY` in that render | **yes** — anyone with it can plant trusted store paths |
-| Rotating any of the three | new value in homelab's sops, switch, bounce `ac-host-ci` | — |
+| Rotating MinIO's root or the signing key | new value in homelab's sops, switch, bounce `ac-host-ci` | — |
 
-That last row is the whole procedure. `minio-init.sh` runs `mc admin user
-add` on every start, and MinIO's CreateUser rewrites an existing user's
-secret, so the cache user follows the render with no box-side step; MinIO
-takes its root credentials from the environment at every start. For the
-signing key, mint the pair as `flox-binary-cache-<n+1>` (`nix key
+That last row is the whole procedure. MinIO takes its root credentials
+from the environment at every start. The cache user is no longer rotated
+here: `minio-init.sh` is not handed its key pair any more — from homelab
+ADR 0013's switch that pair is Garage's, which MinIO must never store —
+so `flox-cache` keeps the secret MinIO already holds until MinIO leaves,
+and Garage's key rotates by homelab's runbook (ADR 0013 decision 7). For
+the signing key, mint the pair as `flox-binary-cache-<n+1>` (`nix key
 generate-secret`), put the secret half in sops, and **add** the public
 half beside the existing ones — `S3_CACHE_PUBLIC_KEY` is a
 space-separated nix.conf list in the agent compose (bake arg and env
