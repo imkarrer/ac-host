@@ -129,16 +129,18 @@ Buildkite pipeline on the same agent.
 
 ## Nix binary cache (MinIO)
 
-The plugin image, the resident agent env, and each pipeline's top-level
-`env:` point at bucket `flox-binary-cache` on `http://minio:9000` (same
-compose network). After a step, `S3_CACHE_PUSH=true` signs the activated
+The plugin image and the resident agent env point at bucket
+`flox-binary-cache` on `http://minio:9000` (same compose network). No
+pipeline names the cache: when a step is silent the plugin reads the
+agent's `S3_CACHE_*`, which the agent compose sets (homelab's ci-env over
+its defaults), so moving the cache touches no pipeline. After a step, `S3_CACHE_PUSH=true` signs the activated
 closure and writes it back so the next job can substitute instead of
 fetching upstream. Steps only set `command` — they do not repeat
 `s3-cache-*` keys.
 
 | Piece | Where | Secret? |
 | --- | --- | --- |
-| Bucket / endpoint / region / public keys / push | pipeline `env:` + agent env + image bake args | no |
+| Bucket / endpoint / region / public keys / push | agent env + image bake args, in the agent compose | no |
 | Public key file | `.buildkite/flox-binary-cache.pub`, one key per line | no |
 | MinIO root + cache user | homelab's sops, rendered to `/run/secrets/rendered/ci-env` on the box | yes |
 | Nix signing key | `S3_CACHE_SIGNING_KEY` in that render | **yes** — anyone with it can plant trusted store paths |
@@ -151,8 +153,8 @@ takes its root credentials from the environment at every start. For the
 signing key, mint the pair as `flox-binary-cache-<n+1>` (`nix key
 generate-secret`), put the secret half in sops, and **add** the public
 half beside the existing ones — `S3_CACHE_PUBLIC_KEY` is a
-space-separated nix.conf list in `.buildkite/*.yml` and the agent compose
-(bake arg and env default), a line in the `.pub` file. Never drop an old
+space-separated nix.conf list in the agent compose (bake arg and env
+default), a line in the `.pub` file. Never drop an old
 public key: every NAR already in the bucket is signed by it and stays
 substitutable only while it is trusted. `S3_CACHE_PUBLIC_KEY` is not
 secret and is not in the render; the values in this tree are what the
