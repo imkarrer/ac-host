@@ -20,7 +20,7 @@ NixOS + Docker stack for always-on Assetto Corsa practice lobbies and extra race
 | `modules/ac-host.nix` | Docker, firewall port range, systemd static lobbies |
 | `hosts/ac-box/` | Gone since 8 Sep 2026 (`40e9f48`): the pre-homelab example host, not what runs. The host is homelab's `hosts/arcade-box/`; this tree ships only the module |
 
-Three practice lobbies stay up together (124, GR86, Civic FK8, NA Miata, Elise SC, E30): **Blackhawk Farms**, **Brainerd Competition**, **Brainerd Donnybrooke**. Magione stays in the catalog as a stock-track fallback for races. The GR86 and Civic need Custom Shaders Patch. The player README and live leaderboard are on **GitHub Pages** (`site/`); the home box pushes status outbound — no `:8099`.
+Three practice lobbies stay up together (124, GR86, Civic FK8, NSX NA2 S1, NA Miata, Elise SC, E30): **Blackhawk Farms**, **Road America** and **Gingerman Raceway**, as listed in `catalog/statics.json`. Brainerd Competition and Donnybrooke remain in the catalog but have no lobby. Magione stays in the catalog as a stock-track fallback for races. The GR86 and Civic need Custom Shaders Patch. The player README and live leaderboard are on **GitHub Pages** (`site/`); the home box pushes status outbound — no `:8099`.
 
 ## On this Windows machine (content)
 
@@ -28,7 +28,8 @@ From `ac-host/`:
 
 ```powershell
 python scripts/sync_content.py --track blackhawk
-python scripts/sync_content.py --track brainerd-competition
+python scripts/sync_content.py --track road-america
+python scripts/sync_content.py --track gingerman
 python -m unittest sidecar/test_auth.py
 ```
 
@@ -50,7 +51,7 @@ Host arcade-box
 
 `scripts/bootstrap_ssh.py`, the pre-homelab bootstrap (pubkey over the installer's password login, pull `hardware-configuration.nix`, write `hosts/ac-box/ssh-keys.local.nix` here), was retired on 28 Sep 2026. It wrote into `hosts/ac-box/`, which left this tree with the host config on 8 Sep 2026 (`40e9f48`), so from then on no mode of it completed: `--install-only` still copied and verified a key, then failed writing the hardware config. Each of its steps belongs to homelab now: the key list is its `hosts/<host>/ssh-keys.local.nix`, the hardware config is fetched into `hosts/<host>/` with `scp` and tracked, and with password ssh off there is no installer login left to use. A new host's first key goes on by hand, the way arcade-box's did (homelab `docs/runbook-arcade-box-cutover.md`, 0.1). The block above is the `~/.ssh/config` entry the script used to write.
 
-Copy `content/` separately when you want the tracks on the box (Brainerd is large).
+Copy `content/` separately when you want the tracks on the box (Road America is large).
 
 ## On arcade-box
 
@@ -98,8 +99,8 @@ Join from Content Manager (public IP `167.237.13.200`):
 | Lobby | Port | Join |
 | --- | --- | --- |
 | Practice — Blackhawk Farms | `9600` / HTTP `8081` | [Join](https://acstuff.ru/s/q:race/online/join?ip=167.237.13.200&httpPort=8081) |
-| Practice — Brainerd Competition | `9601` / HTTP `8082` | [Join](https://acstuff.ru/s/q:race/online/join?ip=167.237.13.200&httpPort=8082) |
-| Practice — Brainerd Donnybrooke | `9602` / HTTP `8083` | [Join](https://acstuff.ru/s/q:race/online/join?ip=167.237.13.200&httpPort=8083) |
+| Practice — Road America | `9601` / HTTP `8082` | [Join](https://acstuff.ru/s/q:race/online/join?ip=167.237.13.200&httpPort=8082) |
+| Practice — Gingerman Raceway | `9602` / HTTP `8083` | [Join](https://acstuff.ru/s/q:race/online/join?ip=167.237.13.200&httpPort=8083) |
 
 ## Player page (GitHub Pages)
 
@@ -123,17 +124,19 @@ Forward **9600–9615 TCP+UDP**, **8081–8096 TCP**, and **8181–8196 TCP** (C
 
 Not required to get Magione up. When you are ready: create a bot, enable Server Members Intent, create role `ac-practice`, put the token in `.env`, `docker compose --profile bot up -d bot`, set `AUTH_OPEN=0`. Grid Finder is still a manual event listing + results JSON upload.
 
-## Brainerd (Competition + Donnybrooke)
+## Road America and Gingerman
 
-Both layouts are static lobbies in `catalog/statics.json`. Not on disk yet. Download GutBomb 1.1 (free, OverTake login), drag the zip onto Content Manager, then sync once (same folder for both):
+Both are static lobbies in `catalog/statics.json` (slot 1, port 9601; slot 2, port 9602). Install each OverTake zip by dragging it onto Content Manager, then sync:
 
 ```powershell
-python scripts/sync_content.py --track brainerd-competition
+python scripts/sync_content.py --track road-america
+python scripts/sync_content.py --track gingerman
 ```
 
-- Download: https://www.overtake.gg/downloads/brainerd-international-raceway.42674/
-- Folder after install: `content/tracks/gb_brainerd`
-- Layouts: `competition` (16 pits, port 9601), `donnybrooke` (30 pits, we cap at 24, port 9602)
+- Road America: LilSki 1.0, folder `content/tracks/lilski_road_america`, https://www.overtake.gg/downloads/road-america.32732/
+- Gingerman: shin956 / cyruscloud 1.0, folder `content/tracks/gingerman_raceway`, layout `full_forward`, https://www.overtake.gg/downloads/gingerman-raceway.62436/
+
+Brainerd (`catalog/tracks/brainerd-*.json`, GutBomb 1.1, folder `gb_brainerd`) stays in the catalog for one-off races with `acctl.py start-race`.
 
 ## Add a track after Blackhawk
 
