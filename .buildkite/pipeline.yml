@@ -14,14 +14,14 @@ steps:
     key: test
     command: bash scripts/ci_test.sh
     plugins:
-      - imkarrer/flox#main:
+      - imkarrer/flox#v1.0.3:
           command: bash scripts/ci_test.sh
 
   - label: ":nix: Lint"
     key: lint
     command: bash scripts/ci_lint.sh
     plugins:
-      - imkarrer/flox#main:
+      - imkarrer/flox#v1.0.3:
           command: bash scripts/ci_lint.sh
 
   # The bot/sidecar image: .flox/env/manifest.toml containerized by flox, so
@@ -35,7 +35,7 @@ steps:
     key: image
     command: bash scripts/ci_containerize.sh build
     plugins:
-      - imkarrer/flox#main:
+      - imkarrer/flox#v1.0.3:
           command: bash scripts/ci_containerize.sh build
 
   - wait: ~
@@ -63,7 +63,7 @@ steps:
     depends_on: [promote-image]
     command: python3 scripts/ci_queue_prod.py
     plugins:
-      - imkarrer/flox#main:
+      - imkarrer/flox#v1.0.3:
           command: python3 scripts/ci_queue_prod.py
 
   - label: ":pages: Publish player page"
@@ -71,7 +71,7 @@ steps:
     if: build.branch == "main"
     command: python3 scripts/ci_publish_pages.py
     plugins:
-      - imkarrer/flox#main:
+      - imkarrer/flox#v1.0.3:
           command: python3 scripts/ci_publish_pages.py
 
   # Tell homelab this tree moved. homelab's bump-lock step moves the

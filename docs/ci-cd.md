@@ -171,5 +171,7 @@ being applied, jobs still run — the cache just stops warming.
 
 ## Pinning the plugin
 
-`imkarrer/flox#main` until the plugin has a release tag, then pin
-`#v1.0.0`.
+Every pipeline pins `imkarrer/flox#v1.0.3`. Versions 1.0.2 and earlier lack
+the `#!/usr/bin/env bash` hook shebangs, so their hooks fail on this NixOS
+agent, where `/bin` has no `bash`. To upgrade, change the tag in every file
+that `grep -rn 'imkarrer/flox#' .buildkite` lists.

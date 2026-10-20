@@ -10,5 +10,5 @@ steps:
     key: series-pack
     command: bash scripts/ci_series_pack.sh
     plugins:
-      - imkarrer/flox#main:
+      - imkarrer/flox#v1.0.3:
           command: bash scripts/ci_series_pack.sh

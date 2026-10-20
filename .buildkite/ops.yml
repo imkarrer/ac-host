@@ -21,7 +21,7 @@ steps:
     if: build.env("DOWNTIME") == "1"
     command: python3 scripts/ci_downtime.py
     plugins:
-      - imkarrer/flox#main:
+      - imkarrer/flox#v1.0.3:
           command: python3 scripts/ci_downtime.py
 
   - label: ":rocket: Emergency apply now"
@@ -29,5 +29,5 @@ steps:
     if: build.env("EMERGENCY") == "1"
     command: python3 scripts/ci_apply_now.py
     plugins:
-      - imkarrer/flox#main:
+      - imkarrer/flox#v1.0.3:
           command: python3 scripts/ci_apply_now.py
