@@ -171,6 +171,41 @@ EOF
 '''
 
 
+# Experiment, third route: the catalog libraries this manifest already locks,
+# shipped as runtime-packages. Flox's build wrapper sets PYTHONPATH to them,
+# so the services run in run mode with the same versions dev and CI use.
+[build.ac-host-catlibs]
+description = "ac-host bot and sidecars on the environment's own catalog libraries (experiment)"
+version = "0.0.1"
+runtime-packages = ["python312Full", "discordpy", "numpy", "scipy", "pillow", "dejavu_fonts", "git", "rsync"]
+command = '''
+  set -euo pipefail
+  root="$out/lib/ac-host"
+  mkdir -p "$root" "$out/bin"
+  cp -r bot sidecar shared scripts "$root/"
+  cat > "$root/check.py" <<'CHECK'
+import discord, numpy, scipy.signal, PIL.Image, aiohttp
+import auth, details, plugin, bot, skin_livery, skin_uv
+print("ac-host-check ok:", "numpy", numpy.__version__, "scipy", scipy.__version__, "Pillow", PIL.__version__, "discord.py", discord.__version__, "aiohttp", aiohttp.__version__)
+CHECK
+  font="$(readlink -f "$FLOX_ENV/share/fonts/truetype/DejaVuSans.ttf")"
+  for svc in sidecar/auth sidecar/details sidecar/plugin bot/bot check; do
+    bin="$out/bin/ac-host-$(basename "$svc")"
+    cat > "$bin" <<EOF
+#!/usr/bin/env python3
+import os, runpy, sys
+roots = ["$root/scripts", "$root/bot", "$root/sidecar", "$root/shared"]
+sys.path[:0] = roots
+os.environ["PYTHONPATH"] = ":".join(roots + [p for p in os.environ.get("PYTHONPATH", "").split(":") if p])
+os.environ.setdefault("AC_NUMBER_FONT", "$font")
+sys.argv[0] = "$root/$svc.py"
+runpy.run_path(sys.argv[0], run_name="__main__")
+EOF
+    chmod +x "$bin"
+  done
+'''
+
+
 ## Other Environment Options -----------------------------------------
 [options]
 # Systems that environment is compatible with

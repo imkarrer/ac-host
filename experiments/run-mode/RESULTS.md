@@ -156,3 +156,38 @@ same wrapper. In the Linux run-mode image built from the published 0.0.2:
     ac-host-check ok: numpy 2.5.4 scipy 1.18.1 Pillow 13.0.0 discord.py 2.7.1
 
 The image is still 882 MB.
+
+## Fourth route, the one Flox intends: catalog libraries in `runtime-packages`
+
+A research pass through Flox's source, issues and Slack found the route the
+first three runs missed. A manifest build can list the catalog libraries the
+environment already locks in `runtime-packages`; Flox wraps every program the
+build produces with a wrapper that sets `PYTHONPATH` to that runtime
+environment (flox PR #3337, "we want Flox build packages to be
+self-contained"). Flox's own `flox/catalog-util` ships this way
+(`runtime-packages = ["python312", "httpx"]`).
+
+`[build.ac-host-catlibs]` in `.flox/env/manifest.toml` does it for ac-host:
+`runtime-packages = ["python312Full", "discordpy", "numpy", "scipy",
+"pillow", "dejavu_fonts", "git", "rsync"]`, and the build only copies the
+code and writes the launchers. No uv, no Nix, no library-path workaround.
+
+| | macOS | Linux (container) |
+|---|---|---|
+| `flox build ac-host-catlibs` | 7 s | ok |
+| `ac-host-check` | numpy 2.3.2, scipy 1.16.1, Pillow 11.3.0, discord.py 2.5.2, aiohttp 3.12.15 | same |
+| Dev environment (what CI tests) | numpy 2.3.2, scipy 1.16.1, Pillow 11.3.0, discord.py 2.5.2, aiohttp 3.12.15 | — |
+| Bot starts | yes | yes |
+
+Same manifest, same lock, same library versions as CI, and it runs in run
+mode. The image won't be smaller than today's: the catalog `discordpy`
+still pulls in ffmpeg and the audio stack.
+
+Corrections to the earlier sections:
+- The version drift applies to Nix expression builds (deliberately since
+  flox#4708, v1.18.0) and to uv. Manifest builds use the environment's lock.
+- A locally built package can be installed with `[install]
+  x.store-path = "/nix/store/..."`; what's missing is a portable way
+  (flox#3658).
+- The PyPI-wheel fix can be one build-time `auto-patchelf` line instead of
+  the re-exec wrapper; the catalog-library route avoids the problem.
