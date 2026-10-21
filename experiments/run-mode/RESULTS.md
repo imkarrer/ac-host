@@ -91,3 +91,56 @@ production runs another.
 3. Run mode didn't save space here; the dependency tree did all the work.
 4. The literal "same environment from dev to prod" holds only on the dev-mode
    path this repo already uses.
+
+## Second run: no Nix (uv, a manifest build and `flox publish`)
+
+The first run needed a Nix expression and a flake. This run uses only Flox
+and standard Python: `pyproject.toml` and `uv.lock` pin the libraries, a
+`[build.ac-host-services]` in the manifest installs them into a venv in
+`$out` with one wrapper per service, `flox publish` puts the package in the
+`imkarrer` catalog, and `runtime/.flox` installs `imkarrer/ac-host-services`
+in run mode.
+
+| | Nix expression (first run) | uv manifest build |
+|---|---|---|
+| `flox build` on macOS | 23 min 24 s | 32 s |
+| Package closure (macOS) | 2.5 GiB | 652 MiB |
+| Linux `runtime` image, tarball / unpacked | 2.20 GB / 4.46 GB | 882 MB / 1.77 GB |
+| Bot starts, `auth` answers | yes / yes | yes / yes |
+| Python | 3.12.14 (expression nixpkgs) | 3.12.11 (the environment's own) |
+| numpy, scipy, Pillow, aiohttp | 2.5.2, 1.18.1, 12.3.0, 3.14.3 | 2.5.4, 1.18.1, 13.0.0, 3.14.5 (exactly `uv.lock`) |
+
+The image is 59% smaller than today's production image (2.15 GB). That's
+PyPI's `discord.py`, which doesn't pull in ffmpeg and the audio stack, not
+run mode.
+
+Library versions now come from one pin, `uv.lock`, and the interpreter from
+the environment's own lock. CI still tests the catalog libraries (numpy
+2.3.2), so the drift is gone only if dev and CI also install from `uv.lock`.
+
+### What went wrong on the way
+
+- **PyPI's Linux wheels need system libraries Nix's Python doesn't have.**
+  numpy failed with `libstdc++.so.6` and then `libz.so.1` missing. The
+  wrapper adds `libstdc++`; `zlib` still has to be added (install `zlib`, add
+  it to `runtime-packages` and the wrapper's library path). The published
+  0.0.1 is missing it: the bot starts, because numpy loads only when a livery
+  command runs, so a startup check passes and the first livery command would
+  crash.
+- **Flox's build wrapper hides a venv from a bare `python`.** Each command a
+  manifest build produces is wrapped by Flox, which sets `PYTHONPATH` to the
+  build environment and starts commands with the base interpreter. The
+  services work because each wrapper script's shebang names the venv's
+  Python; running the venv's `python` through Flox's wrapper doesn't see the
+  venv's packages.
+- **The container entrypoint doesn't escape arguments.** `docker run <image>
+  echo '(paren)'` fails with a bash syntax error: arguments are joined into
+  one `bash -c` string, quoted when they contain spaces, but other shell
+  characters aren't escaped.
+- **Publishing for Linux needed a Linux machine.** `flox publish` on macOS
+  publishes only the macOS build. The Linux publish ran in a container, needed
+  the SSH remote rewritten to HTTPS, took about 30 minutes, and ended with
+  `Timed out waiting for publish completion` although the package had been
+  published.
+- **Publishing needs the commit pushed,** which here started a branch build
+  on the race server (build 65, passed).

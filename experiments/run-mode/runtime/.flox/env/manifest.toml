@@ -1,11 +1,9 @@
 schema-version = "1.16.0"
 
 # The runtime environment Flox's docs intend for production: it installs one
-# package, the built services, and activates in run mode. In real use the
-# package would come from `flox publish`; here it comes from the experiment
-# flake so nothing is pushed or published.
+# package, the published services, and activates in run mode.
 [install]
-ac-host-services.flake = "git+file:///Users/imkarrer/src/ac-host/_worktrees/run-mode-experiment?dir=experiments/run-mode"
+ac-host-services.pkg-path = "imkarrer/ac-host-services"
 
 [options]
 systems = ["aarch64-linux", "aarch64-darwin"]
