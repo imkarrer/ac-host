@@ -20,27 +20,27 @@
   "packages": [
     {
       "attr_path": "ac-host-services",
-      "derivation": "/nix/store/2d8shdz4ik2wvic1i603kqj1jp870pkv-ac-host-services-0.0.1.drv",
+      "derivation": "/nix/store/rh2x7qkmi3a80q5kdy2yv85y6skv6m5g-ac-host-services-0.0.2.drv",
       "description": "ac-host bot and sidecars, packaged for a run-mode environment (experiment)",
       "install_id": "ac-host-services",
-      "locked_url": "ssh://git@github.com/imkarrer/ac-host.git?rev=ff8302e41caf19868042b5629f9e538f19d7b642",
-      "name": "ac-host-services-0.0.1",
+      "locked_url": "ssh://git@github.com/imkarrer/ac-host.git?rev=1bb4d6231fdd213765c6e6d154cae4c02250b5d4",
+      "name": "ac-host-services-0.0.2",
       "pname": "ac-host-services",
-      "rev": "ff8302e41caf19868042b5629f9e538f19d7b642",
-      "rev_count": 80,
-      "rev_date": "2026-10-21T16:41:42Z",
-      "scrape_date": "2026-10-21T17:17:22.518241Z",
+      "rev": "1bb4d6231fdd213765c6e6d154cae4c02250b5d4",
+      "rev_count": 82,
+      "rev_date": "2026-10-21T17:51:18Z",
+      "scrape_date": "2026-10-21T18:11:58.660741Z",
       "stabilities": [
         "stable",
         "staging",
         "unstable"
       ],
-      "version": "0.0.1",
+      "version": "0.0.2",
       "outputs_to_install": [
         "out"
       ],
       "outputs": {
-        "out": "/nix/store/qgasr7ijfk0b8l10azvpqh60pcnvww5l-ac-host-services-0.0.1"
+        "out": "/nix/store/4l1i8jnikxyn93bvljlj45977sj206mv-ac-host-services-0.0.2"
       },
       "system": "aarch64-darwin",
       "group": "toplevel",
@@ -48,27 +48,27 @@
     },
     {
       "attr_path": "ac-host-services",
-      "derivation": "/nix/store/2jwpb218dq6d407q6hh7glb2s8hh28z9-ac-host-services-0.0.1.drv",
+      "derivation": "/nix/store/r68b71fnkscbjd7xg5wbzqshdw15a4af-ac-host-services-0.0.2.drv",
       "description": "ac-host bot and sidecars, packaged for a run-mode environment (experiment)",
       "install_id": "ac-host-services",
-      "locked_url": "ssh://git@github.com/imkarrer/ac-host.git?rev=ff8302e41caf19868042b5629f9e538f19d7b642",
-      "name": "ac-host-services-0.0.1",
+      "locked_url": "ssh://git@github.com/imkarrer/ac-host.git?rev=1bb4d6231fdd213765c6e6d154cae4c02250b5d4",
+      "name": "ac-host-services-0.0.2",
       "pname": "ac-host-services",
-      "rev": "ff8302e41caf19868042b5629f9e538f19d7b642",
-      "rev_count": 80,
-      "rev_date": "2026-10-21T16:41:42Z",
-      "scrape_date": "2026-10-21T17:17:22.518256Z",
+      "rev": "1bb4d6231fdd213765c6e6d154cae4c02250b5d4",
+      "rev_count": 82,
+      "rev_date": "2026-10-21T17:51:18Z",
+      "scrape_date": "2026-10-21T18:11:58.660752Z",
       "stabilities": [
         "stable",
         "staging",
         "unstable"
       ],
-      "version": "0.0.1",
+      "version": "0.0.2",
       "outputs_to_install": [
         "out"
       ],
       "outputs": {
-        "out": "/nix/store/ljh4hy8qxp8rqb0v2pi1j8m216bchv9k-ac-host-services-0.0.1"
+        "out": "/nix/store/ningj9wq9la32m7gk52ayyh7jhiwlg9j-ac-host-services-0.0.2"
       },
       "system": "aarch64-linux",
       "group": "toplevel",

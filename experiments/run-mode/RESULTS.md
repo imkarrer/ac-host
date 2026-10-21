@@ -144,3 +144,15 @@ the environment's own lock. CI still tests the catalog libraries (numpy
   published.
 - **Publishing needs the commit pushed,** which here started a branch build
   on the race server (build 65, passed).
+
+### Fixed in 0.0.2
+
+`zlib` now ships in `runtime-packages` and sits on the wrappers'
+`LD_LIBRARY_PATH` beside `libstdc++`. A new command, `ac-host-check`, imports
+every service module (including the numpy, scipy and Pillow ones) through the
+same wrapper. In the Linux run-mode image built from the published 0.0.2:
+
+    $ docker run --rm ac-host-runtime:runtime ac-host-check
+    ac-host-check ok: numpy 2.5.4 scipy 1.18.1 Pillow 13.0.0 discord.py 2.7.1
+
+The image is still 882 MB.
