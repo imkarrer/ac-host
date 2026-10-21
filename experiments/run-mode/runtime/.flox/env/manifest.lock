@@ -1,0 +1,70 @@
+{
+  "lockfile-version": 1,
+  "manifest": {
+    "schema-version": "1.16.0",
+    "install": {
+      "ac-host-services": {
+        "flake": "git+file:///Users/imkarrer/src/ac-host/_worktrees/run-mode-experiment?dir=experiments/run-mode"
+      }
+    },
+    "options": {
+      "systems": [
+        "aarch64-linux",
+        "aarch64-darwin"
+      ],
+      "activate": {
+        "mode": "run"
+      }
+    }
+  },
+  "packages": [
+    {
+      "install_id": "ac-host-services",
+      "locked-url": "git+file:///Users/imkarrer/src/ac-host/_worktrees/run-mode-experiment?dir=experiments/run-mode",
+      "locked-flake-attr-path": "packages.aarch64-linux.default",
+      "derivation": "/nix/store/sd6v3jd124x8icafnlihjffg5j5sg4as-ac-host-services-0.0.1.drv",
+      "outputs": {
+        "out": "/nix/store/mm2cdj5qjjxfnkkqyn8yn4l6824gx6mv-ac-host-services-0.0.1"
+      },
+      "output-names": [
+        "out"
+      ],
+      "outputs-to-install": [
+        "out"
+      ],
+      "requested-outputs-to-install": [],
+      "package-system": "aarch64-linux",
+      "system": "aarch64-linux",
+      "name": "ac-host-services-0.0.1",
+      "pname": "ac-host-services",
+      "version": "0.0.1",
+      "broken": false,
+      "unfree": false,
+      "priority": 5
+    },
+    {
+      "install_id": "ac-host-services",
+      "locked-url": "git+file:///Users/imkarrer/src/ac-host/_worktrees/run-mode-experiment?dir=experiments/run-mode",
+      "locked-flake-attr-path": "packages.aarch64-darwin.default",
+      "derivation": "/nix/store/zp7hmxigh2vx4gpfmw1wrsdc2r93c4xc-ac-host-services-0.0.1.drv",
+      "outputs": {
+        "out": "/nix/store/hlf3h6h4dw9jnz4gc1ms97hqd47pb9nr-ac-host-services-0.0.1"
+      },
+      "output-names": [
+        "out"
+      ],
+      "outputs-to-install": [
+        "out"
+      ],
+      "requested-outputs-to-install": [],
+      "package-system": "aarch64-darwin",
+      "system": "aarch64-darwin",
+      "name": "ac-host-services-0.0.1",
+      "pname": "ac-host-services",
+      "version": "0.0.1",
+      "broken": false,
+      "unfree": false,
+      "priority": 5
+    }
+  ]
+}
