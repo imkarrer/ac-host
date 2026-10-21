@@ -40,6 +40,9 @@ gcc-unwrapped.pkg-path = "gcc-unwrapped"
 gcc-unwrapped.outputs = ["lib"]
 gcc-unwrapped.priority = 6
 gcc-unwrapped.systems = ["x86_64-linux", "aarch64-linux"]
+# zlib for the same wheels (numpy loads libz.so.1); macOS has it in the system.
+zlib.pkg-path = "zlib"
+zlib.systems = ["x86_64-linux", "aarch64-linux"]
 # gum.pkg-path = "gum"
 # gum.version = "^0.14.5"
 
@@ -115,15 +118,17 @@ common = '''
 # the interpreter, font and tools from this manifest.
 [build.ac-host-services]
 description = "ac-host bot and sidecars, packaged for a run-mode environment (experiment)"
-version = "0.0.1"
-runtime-packages = ["python312Full", "dejavu_fonts", "git", "rsync", "gcc-unwrapped"]
+version = "0.0.2"
+runtime-packages = ["python312Full", "dejavu_fonts", "git", "rsync", "gcc-unwrapped", "zlib"]
 command = '''
   set -euo pipefail
   py="$(readlink -f "$(command -v python3)")"
   font="$(readlink -f "$FLOX_ENV/share/fonts/truetype/DejaVuSans.ttf")"
   libs=""
   if [ "$(uname -s)" = Linux ]; then
-    libs="$(dirname "$(readlink -f "$FLOX_ENV/lib/libstdc++.so.6")")"
+    # PyPI's manylinux wheels expect these from the system; Nix's Python
+    # doesn't provide them, so the wrappers put them on LD_LIBRARY_PATH.
+    libs="$(dirname "$(readlink -f "$FLOX_ENV/lib/libstdc++.so.6")"):$(dirname "$(readlink -f "$FLOX_ENV/lib/libz.so.1")")"
   fi
   path="$(dirname "$(readlink -f "$(command -v git)")"):$(dirname "$(readlink -f "$(command -v rsync)")")"
 
@@ -133,7 +138,14 @@ command = '''
   root="$out/lib/ac-host"
   mkdir -p "$root" "$out/bin"
   cp -r bot sidecar shared scripts "$root/"
-  for svc in sidecar/auth sidecar/details sidecar/plugin bot/bot; do
+  # ac-host-check imports every service module, including the ones that load
+  # numpy, scipy and Pillow only for some commands, so a smoke test sees them.
+  cat > "$root/check.py" <<'CHECK'
+import discord, numpy, scipy.signal, PIL.Image, aiohttp
+import auth, details, plugin, bot, skin_livery, skin_uv
+print("ac-host-check ok:", "numpy", numpy.__version__, "scipy", scipy.__version__, "Pillow", PIL.__version__, "discord.py", discord.__version__)
+CHECK
+  for svc in sidecar/auth sidecar/details sidecar/plugin bot/bot check; do
     bin="$out/bin/ac-host-$(basename "$svc")"
     cat > "$bin" <<EOF
 #!$out/venv/bin/python -u
