@@ -1,0 +1,8 @@
+# Experiment (experiments/run-mode): the bot's and sidecars' third-party
+# libraries as standard Python metadata, so `uv.lock` pins them and the Flox
+# manifest build packages the services without any Nix.
+[project]
+name = "ac-host-services"
+version = "0.0.1"
+requires-python = ">=3.12,<3.13"
+dependencies = ["discord.py", "numpy", "scipy", "pillow"]
