@@ -1,0 +1,27 @@
+{
+  "lockfile-version": 1,
+  "manifest": {
+    "schema-version": "1.16.0",
+    "install": {
+      "ac-host-python": {
+        "store-path": "/nix/store/bdfbhmqb2wn7mzg3n9p47s9j6rhxbxhp-ac-host-python-0.0.1"
+      }
+    },
+    "options": {
+      "systems": [
+        "aarch64-darwin"
+      ],
+      "activate": {
+        "mode": "run"
+      }
+    }
+  },
+  "packages": [
+    {
+      "install_id": "ac-host-python",
+      "store_path": "/nix/store/bdfbhmqb2wn7mzg3n9p47s9j6rhxbxhp-ac-host-python-0.0.1",
+      "system": "aarch64-darwin",
+      "priority": 5
+    }
+  ]
+}

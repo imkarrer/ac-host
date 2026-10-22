@@ -190,3 +190,41 @@ Corrections to the earlier sections:
   (flox#3658).
 - The PyPI-wheel fix can be one build-time `auto-patchelf` line instead of
   the re-exec wrapper; the catalog-library route avoids the problem.
+
+## Prototypes for the proposals (22 October 2026)
+
+**One list (proposal 3), with an existing feature.** Marking the dev-only tools
+with `pkg-group = "dev-only"` (gh, nixfmt-rfc-style, uv) and dropping
+`runtime-packages` from `[build.ac-host-catlibs]`: every package is listed
+once, the shipped package contains none of the three tools (git and rsync,
+which the bot needs, still ship), the dev shell still has them, and
+`ac-host-check` passes with CI's versions. `runtime-packages` trims only the
+toplevel group, so a separate group is left out. That's an undocumented side
+effect of a feature meant for version conflicts, and each group is a separate
+download; the proposal is a documented dev-only flag.
+
+**Ship the environment (proposal 4).** `[build.ac-host-python]` wraps the
+environment's own `python3`, so Flox's build wrapper puts the catalog
+libraries on its path. `python-runtime/.flox` installs it by store path, in
+run mode. Containerized on Linux in run mode, with the repo bind-mounted at
+`/repo` and `APP_PYTHONPATH` naming its module folders:
+
+    $ docker run --rm -v "$PWD":/repo:ro -e APP_PYTHONPATH=... \
+        ac-host-python-runtime:proposal4 python3 /repo/experiments/run-mode/check_imports.py
+    check ok: numpy 2.3.2 scipy 1.16.1 Pillow 11.3.0 discord.py 2.5.2
+
+The bot starts the same way. No app packaging; image 2.16 GB, the same as
+today's dev image. Finding: Flox's build wrapper *replaces* `PYTHONPATH`
+with the runtime libraries, dropping whatever the user set, so the shim adds
+`APP_PYTHONPATH` back in front. A product version would prepend instead.
+
+**The PyPI-wheel fix (issue item 7), confirmed.** `[build.ac-host-services-patchelf]`
+runs `auto-patchelf --paths "$out/venv/lib" --libs "$FLOX_ENV/lib"` after
+`uv sync` (needs both `auto-patchelf` and `patchelf` installed, plus
+`gcc-unwrapped` and `zlib` in `runtime-packages`). On Linux the build reports
+"0 dependencies could not be satisfied", and a bare venv Python with
+`LD_LIBRARY_PATH` and `LD_AUDIT` unset imports numpy 2.5.4, scipy 1.18.1,
+Pillow 13.0.0 and discord.py 2.7.1. That replaces the re-exec wrapper.
+
+Also: once the manifest changed, resolving packages in the container
+required a FloxHub login.

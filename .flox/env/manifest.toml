@@ -31,10 +31,13 @@ numpy.pkg-path = "python312Packages.numpy"
 # never declared. AC_NUMBER_FONT overrides the choice.
 dejavu_fonts.pkg-path = "dejavu_fonts"
 nixfmt-rfc-style.pkg-path = "nixfmt-rfc-style"
+nixfmt-rfc-style.pkg-group = "dev-only"
 gh.pkg-path = "gh"
+gh.pkg-group = "dev-only"
 python312Full.pkg-path = "python312Full"
 discordpy.pkg-path = "python312Packages.discordpy"
 uv.pkg-path = "uv"
+uv.pkg-group = "dev-only"
 # libstdc++ for the services' PyPI wheels (numpy, scipy); macOS has it in the system.
 gcc-unwrapped.pkg-path = "gcc-unwrapped"
 gcc-unwrapped.outputs = ["lib"]
@@ -43,6 +46,11 @@ gcc-unwrapped.systems = ["x86_64-linux", "aarch64-linux"]
 # zlib for the same wheels (numpy loads libz.so.1); macOS has it in the system.
 zlib.pkg-path = "zlib"
 zlib.systems = ["x86_64-linux", "aarch64-linux"]
+# Rewrites the PyPI wheels' library references at build time (item 7 test).
+auto-patchelf.pkg-path = "auto-patchelf"
+auto-patchelf.systems = ["x86_64-linux", "aarch64-linux"]
+patchelf.pkg-path = "patchelf"
+patchelf.systems = ["x86_64-linux", "aarch64-linux"]
 # gum.pkg-path = "gum"
 # gum.version = "^0.14.5"
 
@@ -177,7 +185,6 @@ EOF
 [build.ac-host-catlibs]
 description = "ac-host bot and sidecars on the environment's own catalog libraries (experiment)"
 version = "0.0.1"
-runtime-packages = ["python312Full", "discordpy", "numpy", "scipy", "pillow", "dejavu_fonts", "git", "rsync"]
 command = '''
   set -euo pipefail
   root="$out/lib/ac-host"
@@ -200,6 +207,58 @@ os.environ["PYTHONPATH"] = ":".join(roots + [p for p in os.environ.get("PYTHONPA
 os.environ.setdefault("AC_NUMBER_FONT", "$font")
 sys.argv[0] = "$root/$svc.py"
 runpy.run_path(sys.argv[0], run_name="__main__")
+EOF
+    chmod +x "$bin"
+  done
+'''
+
+
+# Prototype for proposal 4: the environment's own Python, wrapped by Flox's
+# build wrapper so its catalog libraries import in run mode. No app packaging:
+# the code stays bind-mounted, as production runs it today.
+[build.ac-host-python]
+description = "This environment's Python with its catalog libraries, importable in run mode (prototype)"
+version = "0.0.1"
+command = '''
+  mkdir -p "$out/bin"
+  py="$(readlink -f "$(command -v python3)")"
+  for name in python3 python; do
+    # Flox's build wrapper replaces PYTHONPATH with the runtime libraries;
+    # APP_PYTHONPATH carries the app's own module folders in front of them.
+    cat > "$out/bin/$name" <<EOF
+#!/bin/sh
+PYTHONPATH="\${APP_PYTHONPATH:+\$APP_PYTHONPATH:}\$PYTHONPATH" exec $py "\$@"
+EOF
+    chmod +x "$out/bin/$name"
+  done
+'''
+
+
+# Item 7 test: the uv build with the wheels fixed at build time by
+# auto-patchelf, and no LD_LIBRARY_PATH re-exec in the launchers.
+[build.ac-host-services-patchelf]
+description = "ac-host services from uv.lock, wheels patched at build time (experiment)"
+version = "0.0.1"
+runtime-packages = ["python312Full", "dejavu_fonts", "git", "rsync", "gcc-unwrapped", "zlib"]
+command = '''
+  set -euo pipefail
+  py="$(readlink -f "$(command -v python3)")"
+  uv venv --python "$py" "$out/venv"
+  UV_PROJECT_ENVIRONMENT="$out/venv" uv sync --frozen --no-install-project --python "$py"
+  if [ "$(uname -s)" = Linux ]; then
+    auto-patchelf --paths "$out/venv/lib" --libs "$FLOX_ENV/lib"
+  fi
+  root="$out/lib/ac-host"
+  mkdir -p "$root" "$out/bin"
+  cp -r bot sidecar shared scripts "$root/"
+  printf 'import discord, numpy, scipy.signal, PIL.Image, aiohttp\nimport auth, details, plugin, bot, skin_livery, skin_uv\nprint("ac-host-check ok:", "numpy", numpy.__version__, "scipy", scipy.__version__, "Pillow", PIL.__version__)\n' > "$root/check.py"
+  for svc in bot/bot check; do
+    bin="$out/bin/ac-host-$(basename "$svc")"
+    cat > "$bin" <<EOF
+#!$out/venv/bin/python -u
+import runpy, sys
+sys.path[:0] = ["$root/scripts", "$root/bot", "$root/sidecar", "$root/shared"]
+runpy.run_path("$root/$svc.py", run_name="__main__")
 EOF
     chmod +x "$bin"
   done

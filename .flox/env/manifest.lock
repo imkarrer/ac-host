@@ -3,6 +3,13 @@
   "manifest": {
     "schema-version": "1.16.0",
     "install": {
+      "auto-patchelf": {
+        "pkg-path": "auto-patchelf",
+        "systems": [
+          "x86_64-linux",
+          "aarch64-linux"
+        ]
+      },
       "dejavu_fonts": {
         "pkg-path": "dejavu_fonts"
       },
@@ -21,16 +28,25 @@
         ]
       },
       "gh": {
-        "pkg-path": "gh"
+        "pkg-path": "gh",
+        "pkg-group": "dev-only"
       },
       "git": {
         "pkg-path": "git"
       },
       "nixfmt-rfc-style": {
-        "pkg-path": "nixfmt-rfc-style"
+        "pkg-path": "nixfmt-rfc-style",
+        "pkg-group": "dev-only"
       },
       "numpy": {
         "pkg-path": "python312Packages.numpy"
+      },
+      "patchelf": {
+        "pkg-path": "patchelf",
+        "systems": [
+          "x86_64-linux",
+          "aarch64-linux"
+        ]
       },
       "pillow": {
         "pkg-path": "python312Packages.pillow"
@@ -45,7 +61,8 @@
         "pkg-path": "python312Packages.scipy"
       },
       "uv": {
-        "pkg-path": "uv"
+        "pkg-path": "uv",
+        "pkg-group": "dev-only"
       },
       "zlib": {
         "pkg-path": "zlib",
@@ -63,18 +80,13 @@
     "build": {
       "ac-host-catlibs": {
         "command": "  set -euo pipefail\n  root=\"$out/lib/ac-host\"\n  mkdir -p \"$root\" \"$out/bin\"\n  cp -r bot sidecar shared scripts \"$root/\"\n  cat > \"$root/check.py\" <<'CHECK'\nimport discord, numpy, scipy.signal, PIL.Image, aiohttp\nimport auth, details, plugin, bot, skin_livery, skin_uv\nprint(\"ac-host-check ok:\", \"numpy\", numpy.__version__, \"scipy\", scipy.__version__, \"Pillow\", PIL.__version__, \"discord.py\", discord.__version__, \"aiohttp\", aiohttp.__version__)\nCHECK\n  font=\"$(readlink -f \"$FLOX_ENV/share/fonts/truetype/DejaVuSans.ttf\")\"\n  for svc in sidecar/auth sidecar/details sidecar/plugin bot/bot check; do\n    bin=\"$out/bin/ac-host-$(basename \"$svc\")\"\n    cat > \"$bin\" <<EOF\n#!/usr/bin/env python3\nimport os, runpy, sys\nroots = [\"$root/scripts\", \"$root/bot\", \"$root/sidecar\", \"$root/shared\"]\nsys.path[:0] = roots\nos.environ[\"PYTHONPATH\"] = \":\".join(roots + [p for p in os.environ.get(\"PYTHONPATH\", \"\").split(\":\") if p])\nos.environ.setdefault(\"AC_NUMBER_FONT\", \"$font\")\nsys.argv[0] = \"$root/$svc.py\"\nrunpy.run_path(sys.argv[0], run_name=\"__main__\")\nEOF\n    chmod +x \"$bin\"\n  done\n",
-        "runtime-packages": [
-          "python312Full",
-          "discordpy",
-          "numpy",
-          "scipy",
-          "pillow",
-          "dejavu_fonts",
-          "git",
-          "rsync"
-        ],
         "version": "0.0.1",
         "description": "ac-host bot and sidecars on the environment's own catalog libraries (experiment)"
+      },
+      "ac-host-python": {
+        "command": "  mkdir -p \"$out/bin\"\n  py=\"$(readlink -f \"$(command -v python3)\")\"\n  for name in python3 python; do\n    # Flox's build wrapper replaces PYTHONPATH with the runtime libraries;\n    # APP_PYTHONPATH carries the app's own module folders in front of them.\n    cat > \"$out/bin/$name\" <<EOF\n#!/bin/sh\nPYTHONPATH=\"\\${APP_PYTHONPATH:+\\$APP_PYTHONPATH:}\\$PYTHONPATH\" exec $py \"\\$@\"\nEOF\n    chmod +x \"$out/bin/$name\"\n  done\n",
+        "version": "0.0.1",
+        "description": "This environment's Python with its catalog libraries, importable in run mode (prototype)"
       },
       "ac-host-services": {
         "command": "  set -euo pipefail\n  py=\"$(readlink -f \"$(command -v python3)\")\"\n  font=\"$(readlink -f \"$FLOX_ENV/share/fonts/truetype/DejaVuSans.ttf\")\"\n  libs=\"\"\n  if [ \"$(uname -s)\" = Linux ]; then\n    # PyPI's manylinux wheels expect these from the system; Nix's Python\n    # doesn't provide them, so the wrappers put them on LD_LIBRARY_PATH.\n    libs=\"$(dirname \"$(readlink -f \"$FLOX_ENV/lib/libstdc++.so.6\")\"):$(dirname \"$(readlink -f \"$FLOX_ENV/lib/libz.so.1\")\")\"\n  fi\n  path=\"$(dirname \"$(readlink -f \"$(command -v git)\")\"):$(dirname \"$(readlink -f \"$(command -v rsync)\")\")\"\n\n  uv venv --python \"$py\" \"$out/venv\"\n  UV_PROJECT_ENVIRONMENT=\"$out/venv\" uv sync --frozen --no-install-project --python \"$py\"\n\n  root=\"$out/lib/ac-host\"\n  mkdir -p \"$root\" \"$out/bin\"\n  cp -r bot sidecar shared scripts \"$root/\"\n  # ac-host-check imports every service module, including the ones that load\n  # numpy, scipy and Pillow only for some commands, so a smoke test sees them.\n  cat > \"$root/check.py\" <<'CHECK'\nimport discord, numpy, scipy.signal, PIL.Image, aiohttp\nimport auth, details, plugin, bot, skin_livery, skin_uv\nprint(\"ac-host-check ok:\", \"numpy\", numpy.__version__, \"scipy\", scipy.__version__, \"Pillow\", PIL.__version__, \"discord.py\", discord.__version__)\nCHECK\n  for svc in sidecar/auth sidecar/details sidecar/plugin bot/bot check; do\n    bin=\"$out/bin/ac-host-$(basename \"$svc\")\"\n    cat > \"$bin\" <<EOF\n#!$out/venv/bin/python -u\n# Generated by the ac-host-services build. Sets up the environment the\n# service expects, re-executing once so the loader sees LD_LIBRARY_PATH.\nimport os, sys\nenv = os.environ\nif \"$libs\" and env.get(\"AC_HOST_LIBS\") != \"$libs\":\n    env[\"AC_HOST_LIBS\"] = \"$libs\"\n    env[\"LD_LIBRARY_PATH\"] = \"$libs\" + (\":\" + env[\"LD_LIBRARY_PATH\"] if env.get(\"LD_LIBRARY_PATH\") else \"\")\n    os.execv(sys.executable, [sys.executable, \"-u\"] + sys.argv)\nroots = [\"$root/scripts\", \"$root/bot\", \"$root/sidecar\", \"$root/shared\"]\nenv[\"PYTHONPATH\"] = \":\".join(roots)\nenv.setdefault(\"AC_NUMBER_FONT\", \"$font\")\nenv[\"PATH\"] = \"$path\" + (\":\" + env[\"PATH\"] if env.get(\"PATH\") else \"\")\nsys.path[:0] = roots\nimport runpy\nsys.argv[0] = \"$root/$svc.py\"\nrunpy.run_path(sys.argv[0], run_name=\"__main__\")\nEOF\n    chmod +x \"$bin\"\n  done\n",
@@ -88,10 +100,354 @@
         ],
         "version": "0.0.2",
         "description": "ac-host bot and sidecars, packaged for a run-mode environment (experiment)"
+      },
+      "ac-host-services-patchelf": {
+        "command": "  set -euo pipefail\n  py=\"$(readlink -f \"$(command -v python3)\")\"\n  uv venv --python \"$py\" \"$out/venv\"\n  UV_PROJECT_ENVIRONMENT=\"$out/venv\" uv sync --frozen --no-install-project --python \"$py\"\n  if [ \"$(uname -s)\" = Linux ]; then\n    auto-patchelf --paths \"$out/venv/lib\" --libs \"$FLOX_ENV/lib\"\n  fi\n  root=\"$out/lib/ac-host\"\n  mkdir -p \"$root\" \"$out/bin\"\n  cp -r bot sidecar shared scripts \"$root/\"\n  printf 'import discord, numpy, scipy.signal, PIL.Image, aiohttp\\nimport auth, details, plugin, bot, skin_livery, skin_uv\\nprint(\"ac-host-check ok:\", \"numpy\", numpy.__version__, \"scipy\", scipy.__version__, \"Pillow\", PIL.__version__)\\n' > \"$root/check.py\"\n  for svc in bot/bot check; do\n    bin=\"$out/bin/ac-host-$(basename \"$svc\")\"\n    cat > \"$bin\" <<EOF\n#!$out/venv/bin/python -u\nimport runpy, sys\nsys.path[:0] = [\"$root/scripts\", \"$root/bot\", \"$root/sidecar\", \"$root/shared\"]\nrunpy.run_path(\"$root/$svc.py\", run_name=\"__main__\")\nEOF\n    chmod +x \"$bin\"\n  done\n",
+        "runtime-packages": [
+          "python312Full",
+          "dejavu_fonts",
+          "git",
+          "rsync",
+          "gcc-unwrapped",
+          "zlib"
+        ],
+        "version": "0.0.1",
+        "description": "ac-host services from uv.lock, wheels patched at build time (experiment)"
       }
     }
   },
   "packages": [
+    {
+      "attr_path": "gh",
+      "broken": false,
+      "derivation": "/nix/store/icrhkiddl9zgwmmpsxnaiv8hgm99d3pg-gh-2.102.0.drv",
+      "description": "GitHub CLI tool",
+      "install_id": "gh",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "name": "gh-2.102.0",
+      "pname": "gh",
+      "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "rev_count": 1097682,
+      "rev_date": "2026-10-20T13:28:04Z",
+      "scrape_date": "2026-10-21T05:50:28.843417Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.102.0",
+      "outputs_to_install": [
+        "out",
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/fdqir2028zfwziy5h0a3rm036yb1xxfd-gh-2.102.0"
+      },
+      "system": "aarch64-darwin",
+      "group": "dev-only",
+      "priority": 5
+    },
+    {
+      "attr_path": "gh",
+      "broken": false,
+      "derivation": "/nix/store/gv9f6fa0l4p8cmsv7k768ysvwvjljrci-gh-2.102.0.drv",
+      "description": "GitHub CLI tool",
+      "install_id": "gh",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "name": "gh-2.102.0",
+      "pname": "gh",
+      "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "rev_count": 1097682,
+      "rev_date": "2026-10-20T13:28:04Z",
+      "scrape_date": "2026-10-21T06:26:17.241066Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.102.0",
+      "outputs_to_install": [
+        "out",
+        "out"
+      ],
+      "outputs": {
+        "debug": "/nix/store/11lmgn7lhvfjfl32cd4xpqjyrwmxlgc7-gh-2.102.0-debug",
+        "out": "/nix/store/h5j4svm5bj2rln8k2c5sgd55nynb5v89-gh-2.102.0"
+      },
+      "system": "aarch64-linux",
+      "group": "dev-only",
+      "priority": 5
+    },
+    {
+      "attr_path": "gh",
+      "broken": false,
+      "derivation": "/nix/store/gxjps41c9b2hm4ngnjf1pq2pmzlcrgzl-gh-2.102.0.drv",
+      "description": "GitHub CLI tool",
+      "install_id": "gh",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "name": "gh-2.102.0",
+      "pname": "gh",
+      "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "rev_count": 1097682,
+      "rev_date": "2026-10-20T13:28:04Z",
+      "scrape_date": "2026-10-21T07:05:52.639255Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.102.0",
+      "outputs_to_install": [
+        "out",
+        "out"
+      ],
+      "outputs": {
+        "debug": "/nix/store/8bwjmhhns96hgcs0sa5n8jn7vdrfypn0-gh-2.102.0-debug",
+        "out": "/nix/store/zf8q69vrdflm3v09wi0ngsgbmj2q1gid-gh-2.102.0"
+      },
+      "system": "x86_64-linux",
+      "group": "dev-only",
+      "priority": 5
+    },
+    {
+      "attr_path": "nixfmt-rfc-style",
+      "broken": false,
+      "derivation": "/nix/store/gfkh6kb0i1b51bkx5h2if48324ka682d-nixfmt-1.5.0.drv",
+      "description": "Official formatter for Nix code",
+      "install_id": "nixfmt-rfc-style",
+      "license": "MPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "name": "nixfmt-1.5.0",
+      "pname": "nixfmt-rfc-style",
+      "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "rev_count": 1097682,
+      "rev_date": "2026-10-20T13:28:04Z",
+      "scrape_date": "2026-10-21T05:50:29.000268Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.5.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/xvlm663icg0yanj6ssadldza00w4vk1i-nixfmt-1.5.0"
+      },
+      "system": "aarch64-darwin",
+      "group": "dev-only",
+      "priority": 5
+    },
+    {
+      "attr_path": "nixfmt-rfc-style",
+      "broken": false,
+      "derivation": "/nix/store/v40il1l83fv7rvv9fms0xkj7csck2mdk-nixfmt-1.5.0.drv",
+      "description": "Official formatter for Nix code",
+      "install_id": "nixfmt-rfc-style",
+      "license": "MPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "name": "nixfmt-1.5.0",
+      "pname": "nixfmt-rfc-style",
+      "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "rev_count": 1097682,
+      "rev_date": "2026-10-20T13:28:04Z",
+      "scrape_date": "2026-10-21T06:26:17.649307Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.5.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/my9rdrng4fn2haw4cmf90apg1cyapihb-nixfmt-1.5.0"
+      },
+      "system": "aarch64-linux",
+      "group": "dev-only",
+      "priority": 5
+    },
+    {
+      "attr_path": "nixfmt-rfc-style",
+      "broken": false,
+      "derivation": "/nix/store/w1mp6y0k5c92pidr7ljxrszdqklfnrdn-nixfmt-1.5.0.drv",
+      "description": "Official formatter for Nix code",
+      "install_id": "nixfmt-rfc-style",
+      "license": "MPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "name": "nixfmt-1.5.0",
+      "pname": "nixfmt-rfc-style",
+      "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "rev_count": 1097682,
+      "rev_date": "2026-10-20T13:28:04Z",
+      "scrape_date": "2026-10-21T07:05:52.912680Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.5.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/barbj51w7pc23xgg546m3az3r658mgq0-nixfmt-1.5.0"
+      },
+      "system": "x86_64-linux",
+      "group": "dev-only",
+      "priority": 5
+    },
+    {
+      "attr_path": "uv",
+      "broken": false,
+      "derivation": "/nix/store/29p5hsm3dvg6fnal9pppgh7d8gjx2ja8-uv-0.13.1.drv",
+      "description": "Extremely fast Python package installer and resolver, written in Rust",
+      "install_id": "uv",
+      "license": "[ Apache-2.0, MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "name": "uv-0.13.1",
+      "pname": "uv",
+      "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "rev_count": 1097682,
+      "rev_date": "2026-10-20T13:28:04Z",
+      "scrape_date": "2026-10-21T05:50:29.306619Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.13.1",
+      "outputs_to_install": [
+        "out",
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/5wd02grqz8aprq88y8mi7207afx0fzng-uv-0.13.1"
+      },
+      "system": "aarch64-darwin",
+      "group": "dev-only",
+      "priority": 5
+    },
+    {
+      "attr_path": "uv",
+      "broken": false,
+      "derivation": "/nix/store/5nd4qwik6vdk9vbkx3a8mkzd6bi5b5kp-uv-0.13.1.drv",
+      "description": "Extremely fast Python package installer and resolver, written in Rust",
+      "install_id": "uv",
+      "license": "[ Apache-2.0, MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "name": "uv-0.13.1",
+      "pname": "uv",
+      "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "rev_count": 1097682,
+      "rev_date": "2026-10-20T13:28:04Z",
+      "scrape_date": "2026-10-21T06:26:17.896819Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.13.1",
+      "outputs_to_install": [
+        "out",
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/fq5dfc6yj7cpg6i9qi588ffi2x73q6ag-uv-0.13.1"
+      },
+      "system": "aarch64-linux",
+      "group": "dev-only",
+      "priority": 5
+    },
+    {
+      "attr_path": "uv",
+      "broken": false,
+      "derivation": "/nix/store/6d86y4rv2glbbzkj7y90d3qq2i488v6z-uv-0.13.1.drv",
+      "description": "Extremely fast Python package installer and resolver, written in Rust",
+      "install_id": "uv",
+      "license": "[ Apache-2.0, MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "name": "uv-0.13.1",
+      "pname": "uv",
+      "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+      "rev_count": 1097682,
+      "rev_date": "2026-10-20T13:28:04Z",
+      "scrape_date": "2026-10-21T07:05:53.153768Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.13.1",
+      "outputs_to_install": [
+        "out",
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/07gw2d21ivy19hgjj8wmyqhf338gqzdj-uv-0.13.1"
+      },
+      "system": "x86_64-linux",
+      "group": "dev-only",
+      "priority": 5
+    },
+    {
+      "attr_path": "auto-patchelf",
+      "broken": false,
+      "derivation": "/nix/store/2hdwiqhckn8r4s073jx6l2a7g93w05h6-auto-patchelf-0-unstable-2024-08-14.drv",
+      "description": "Automatically patch ELF binaries using patchelf",
+      "install_id": "auto-patchelf",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "name": "auto-patchelf-0-unstable-2024-08-14",
+      "pname": "auto-patchelf",
+      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "rev_count": 852432,
+      "rev_date": "2025-08-27T03:49:43Z",
+      "scrape_date": "2025-08-28T03:34:25.307811Z",
+      "stabilities": [
+        "stable",
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2024-08-14",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/wwxypj1qb919nzxsbiblqgx6kvaik3qv-auto-patchelf-0-unstable-2024-08-14"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "auto-patchelf",
+      "broken": false,
+      "derivation": "/nix/store/ylwqcm3xa7094dina66n943v8kv6a1p7-auto-patchelf-0-unstable-2024-08-14.drv",
+      "description": "Automatically patch ELF binaries using patchelf",
+      "install_id": "auto-patchelf",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "name": "auto-patchelf-0-unstable-2024-08-14",
+      "pname": "auto-patchelf",
+      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "rev_count": 852432,
+      "rev_date": "2025-08-27T03:49:43Z",
+      "scrape_date": "2025-08-28T03:51:28.067490Z",
+      "stabilities": [
+        "stable",
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2024-08-14",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/hv0q512wv309w8h7dfgx2rcf2bvcdprl-auto-patchelf-0-unstable-2024-08-14"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
     {
       "attr_path": "dejavu_fonts",
       "broken": false,
@@ -114,6 +470,7 @@
       "unfree": false,
       "version": "2.37",
       "outputs_to_install": [
+        "out",
         "out"
       ],
       "outputs": {
@@ -358,99 +715,6 @@
       "priority": 6
     },
     {
-      "attr_path": "gh",
-      "broken": false,
-      "derivation": "/nix/store/8arnv07dwynjhi3sc4ifbxc761yqqjd2-gh-2.78.0.drv",
-      "description": "GitHub CLI tool",
-      "install_id": "gh",
-      "license": "MIT",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "gh-2.78.0",
-      "pname": "gh",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:26:01.426565Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "2.78.0",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/886src1jhm94xdrllnzz0aww9qmfc50l-gh-2.78.0"
-      },
-      "system": "aarch64-darwin",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "gh",
-      "broken": false,
-      "derivation": "/nix/store/j383h2gq5kwqrdxjp17xihy3s5shsr63-gh-2.78.0.drv",
-      "description": "GitHub CLI tool",
-      "install_id": "gh",
-      "license": "MIT",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "gh-2.78.0",
-      "pname": "gh",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:34:27.056531Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "2.78.0",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/fj5v9hzpzr9jvcpb4d1zqlsacll9n2mp-gh-2.78.0"
-      },
-      "system": "aarch64-linux",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "gh",
-      "broken": false,
-      "derivation": "/nix/store/bknn8xxqbaiplbzg0mjnmghbg5fvsm87-gh-2.78.0.drv",
-      "description": "GitHub CLI tool",
-      "install_id": "gh",
-      "license": "MIT",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "gh-2.78.0",
-      "pname": "gh",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:51:29.700137Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "2.78.0",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/2dpvjfrvc4h2b67ji259xrja5ggh4f17-gh-2.78.0"
-      },
-      "system": "x86_64-linux",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
       "attr_path": "git",
       "broken": false,
       "derivation": "/nix/store/my37053qlsn20agd4gngw3akvvkj8ycn-git-2.50.1.drv",
@@ -472,6 +736,7 @@
       "unfree": false,
       "version": "2.50.1",
       "outputs_to_install": [
+        "out",
         "out",
         "out"
       ],
@@ -546,99 +811,6 @@
         "debug": "/nix/store/xipypc58mgavflc7am3m28sk9hpczwf6-git-2.50.1-debug",
         "doc": "/nix/store/64fvclm5bwrp7zff8wa3cl8z6lhczc9s-git-2.50.1-doc",
         "out": "/nix/store/zhv8ib8y1zfi76afddfnp8fmm562bgaa-git-2.50.1"
-      },
-      "system": "x86_64-linux",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "nixfmt-rfc-style",
-      "broken": false,
-      "derivation": "/nix/store/wkj1xj0v4k5a78hv64dh8rzp860zz7bf-nixfmt-1.0.0.drv",
-      "description": "Official formatter for Nix code",
-      "install_id": "nixfmt-rfc-style",
-      "license": "MPL-2.0",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "nixfmt-1.0.0",
-      "pname": "nixfmt-rfc-style",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:26:04.812923Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "1.0.0",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/2378hkc7c16gbqlwzqyyb0gfif32simh-nixfmt-1.0.0"
-      },
-      "system": "aarch64-darwin",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "nixfmt-rfc-style",
-      "broken": false,
-      "derivation": "/nix/store/miwnyg9acc979crfr5lpc1yv67wc1b0g-nixfmt-1.0.0.drv",
-      "description": "Official formatter for Nix code",
-      "install_id": "nixfmt-rfc-style",
-      "license": "MPL-2.0",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "nixfmt-1.0.0",
-      "pname": "nixfmt-rfc-style",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:34:39.078046Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "1.0.0",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/qlihxwimgfcc0vb2fpp940rcbmz01xvv-nixfmt-1.0.0"
-      },
-      "system": "aarch64-linux",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "nixfmt-rfc-style",
-      "broken": false,
-      "derivation": "/nix/store/1k4az8bzy7m2wyf4d9x6n92pb8q3bl5h-nixfmt-1.0.0.drv",
-      "description": "Official formatter for Nix code",
-      "install_id": "nixfmt-rfc-style",
-      "license": "MPL-2.0",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "nixfmt-1.0.0",
-      "pname": "nixfmt-rfc-style",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:51:41.291532Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "1.0.0",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/glvjpnwkw85ssxxzrh0qc9am81h5pijq-nixfmt-1.0.0"
       },
       "system": "x86_64-linux",
       "group": "toplevel",
@@ -735,6 +907,68 @@
       "outputs": {
         "dist": "/nix/store/ic2w0dmgpmz8sfqh28mrqylr2ylf8nh2-python3.12-numpy-2.3.2-dist",
         "out": "/nix/store/jiiwx8zbbw12knaf9r46dnyh0v42h9bz-python3.12-numpy-2.3.2"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "patchelf",
+      "broken": false,
+      "derivation": "/nix/store/graj4rbd6k0xrp72mpv96g3z1a9qn2i2-patchelf-0.15.0.drv",
+      "description": "Small utility to modify the dynamic linker and RPATH of ELF executables",
+      "install_id": "patchelf",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "name": "patchelf-0.15.0",
+      "pname": "patchelf",
+      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "rev_count": 852432,
+      "rev_date": "2025-08-27T03:49:43Z",
+      "scrape_date": "2025-08-28T03:34:42.690547Z",
+      "stabilities": [
+        "stable",
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.15.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/9w95kcjxwrpqg608m8hg07wpifd1pdvj-patchelf-0.15.0"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "patchelf",
+      "broken": false,
+      "derivation": "/nix/store/8g5w36cy5yg8znr5jk6f85vpsgvy9xwm-patchelf-0.15.0.drv",
+      "description": "Small utility to modify the dynamic linker and RPATH of ELF executables",
+      "install_id": "patchelf",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "name": "patchelf-0.15.0",
+      "pname": "patchelf",
+      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
+      "rev_count": 852432,
+      "rev_date": "2025-08-27T03:49:43Z",
+      "scrape_date": "2025-08-28T03:51:44.626461Z",
+      "stabilities": [
+        "stable",
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.15.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/b3rsa3r13bkp8hr5g3pncxpb6b3crvxl-patchelf-0.15.0"
       },
       "system": "x86_64-linux",
       "group": "toplevel",
@@ -858,6 +1092,7 @@
       "unfree": false,
       "version": "python3-3.12.11",
       "outputs_to_install": [
+        "out",
         "out"
       ],
       "outputs": {
@@ -953,6 +1188,7 @@
       "unfree": false,
       "version": "3.4.1",
       "outputs_to_install": [
+        "out",
         "out"
       ],
       "outputs": {
@@ -1115,101 +1351,6 @@
       "outputs": {
         "dist": "/nix/store/pi5m8hlfbp7b610cwnrmk0v1xfz5wh7d-python3.12-scipy-1.16.1-dist",
         "out": "/nix/store/1fgm6rqad5c1alsbls9sc891mj6zc16b-python3.12-scipy-1.16.1"
-      },
-      "system": "x86_64-linux",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "uv",
-      "broken": false,
-      "derivation": "/nix/store/g2kfc67p7fg7q5zpri6432d36ak1bsj3-uv-0.8.6.drv",
-      "description": "Extremely fast Python package installer and resolver, written in Rust",
-      "install_id": "uv",
-      "license": "[ Apache-2.0, MIT ]",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "uv-0.8.6",
-      "pname": "uv",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:27:20.423821Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "0.8.6",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/hxazvw40v90nic1yjx23cdkj6hqqlywa-uv-0.8.6"
-      },
-      "system": "aarch64-darwin",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "uv",
-      "broken": false,
-      "derivation": "/nix/store/5m6laj37dkg7jpxmr69dnb3q2m422d1a-uv-0.8.6.drv",
-      "description": "Extremely fast Python package installer and resolver, written in Rust",
-      "install_id": "uv",
-      "license": "[ Apache-2.0, MIT ]",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "uv-0.8.6",
-      "pname": "uv",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:36:40.649674Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "0.8.6",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/li6y1v2mjj30fd5prwkawidq5lcn9ja9-uv-0.8.6"
-      },
-      "system": "aarch64-linux",
-      "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "uv",
-      "broken": false,
-      "derivation": "/nix/store/fsv3g2p4y7c04678a0bpk6yparh2ysb7-uv-0.8.6.drv",
-      "description": "Extremely fast Python package installer and resolver, written in Rust",
-      "install_id": "uv",
-      "license": "[ Apache-2.0, MIT ]",
-      "locked_url": "https://github.com/flox/nixpkgs?rev=8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "name": "uv-0.8.6",
-      "pname": "uv",
-      "rev": "8a6d5427d99ec71c64f0b93d45778c889005d9c2",
-      "rev_count": 852432,
-      "rev_date": "2025-08-27T03:49:43Z",
-      "scrape_date": "2025-08-28T03:53:31.236928Z",
-      "stabilities": [
-        "stable",
-        "staging",
-        "unstable"
-      ],
-      "unfree": false,
-      "version": "0.8.6",
-      "outputs_to_install": [
-        "out",
-        "out",
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/hxvcjq4a053l4gm8asl4ynjyhlz2azib-uv-0.8.6"
       },
       "system": "x86_64-linux",
       "group": "toplevel",

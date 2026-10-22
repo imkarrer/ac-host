@@ -1,0 +1,10 @@
+schema-version = "1.16.0"
+
+# Proposal 4 prototype: run mode, one package (the wrapped Python), the app's
+# code bind-mounted. Installed by store path, so nothing is published.
+[install]
+ac-host-python.store-path = "/nix/store/bdfbhmqb2wn7mzg3n9p47s9j6rhxbxhp-ac-host-python-0.0.1"
+
+[options]
+systems = ["aarch64-darwin"]
+activate.mode = "run"
