@@ -159,13 +159,12 @@ The image is still 882 MB.
 
 ## Fourth route, the one Flox intends: catalog libraries in `runtime-packages`
 
-A research pass through Flox's source, issues and Slack found the route the
-first three runs missed. A manifest build can list the catalog libraries the
+A closer read of Flox's source and docs found the route the first three runs
+missed. A manifest build can list the catalog libraries the
 environment already locks in `runtime-packages`; Flox wraps every program the
 build produces with a wrapper that sets `PYTHONPATH` to that runtime
 environment (flox PR #3337, "we want Flox build packages to be
-self-contained"). Flox's own `flox/catalog-util` ships this way
-(`runtime-packages = ["python312", "httpx"]`).
+self-contained").
 
 `[build.ac-host-catlibs]` in `.flox/env/manifest.toml` does it for ac-host:
 `runtime-packages = ["python312Full", "discordpy", "numpy", "scipy",
