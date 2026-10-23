@@ -270,5 +270,14 @@ strategy: Don't bundle Python deps - include `requirements.txt` and setup
 script", a script that runs `uv pip install` from PyPI when the app first
 starts. The `floxify` skill sets Python up as a venv that the on-activate hook
 fills with pip, which exists only in an activated dev shell. Neither mentions
-run mode, `runtime-packages` or catalog Python libraries. An agent following
-them lands where this repo did: production in dev mode.
+run mode, `runtime-packages` or catalog Python libraries.
+
+**What the agent on this repo actually did.** The agent that ran these
+experiments read the Python guide's build section first, then turned its
+recipes down: both install from PyPI, which would bring back the second
+dependency list this repo had removed. It wrote the Nix package (first route,
+above) instead, the one documented build on catalog libraries. Nothing in the
+docs says a manifest build can use catalog libraries through the build
+wrapper's PYTHONPATH. It also never ran the guide's recipes, so the pip
+failure above went unnoticed until they were tested by hand. Nothing shows the
+skills shaped that choice; they're what the next agent will read.
