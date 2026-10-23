@@ -228,3 +228,47 @@ Pillow 13.0.0 and discord.py 2.7.1. That replaces the re-exec wrapper.
 
 Also: once the manifest changed, resolving packages in the container
 required a FloxHub login.
+
+## The docs, verbatim: the Python guide's two build recipes (23 October 2026)
+
+The question a customer would ask first: what happens if I follow
+https://flox.dev/docs/languages/python#build-with-flox exactly? Tested on a
+one-module app, `hello`, whose only dependency is numpy, so ac-host's layout
+can't be the cause. Flox 1.18.2.
+
+**Pip** (`docs-pip/`). The guide's whole build is `pip install --target=$out .`.
+
+1. The build fails: `ERROR: Could not find an activated virtualenv (required).`
+   Flox's activation writes a `pip.ini` with `require-virtualenv = true`
+   whenever pip is installed, and the comment in
+   `assets/environment-interpreter/common/etc/profile.d/profile.d.functions`
+   says it applies to builds too. The documented recipe can't pass.
+2. With `PIP_REQUIRE_VIRTUALENV=false`, it builds, and the program it produces
+   fails: `ModuleNotFoundError: No module named 'hello'`. pip puts the app and
+   numpy at the top of `$out`, and Flox's build wrapper doesn't put `$out` on
+   Python's path.
+
+**Poetry** (`docs-poetry/`). The guide's manifest, unchanged except the
+placeholder script name.
+
+- macOS: runs. But `python3.version = ">=3.12"` resolved to Python 3.14, and
+  numpy is 2.5.4 from PyPI, not the catalog's.
+- Linux (`docs-poetry/linux-check.sh` in `ghcr.io/flox/flox`): numpy fails to
+  import everywhere, with `libz.so.1` or `libstdc++.so.6` missing: in the
+  activated dev shell, run bare as a run-mode image would, and installed into a
+  run-mode environment. The fix is the undocumented `auto-patchelf` step from
+  the uv route above.
+
+So neither documented recipe gets a Python app with a compiled dependency
+running on Linux, and the one that runs on macOS ships PyPI versions, not the
+locked ones dev and CI use. The route that works, catalog libraries with the
+build wrapper's PYTHONPATH (fourth route, above), isn't in the guide.
+
+**What an agent is told.** Flox's public agent skills (flox/flox-skills,
+`flox-plugin/skills/flox/references/builds.md` line 110) say: "Python package
+strategy: Don't bundle Python deps - include `requirements.txt` and setup
+script", a script that runs `uv pip install` from PyPI when the app first
+starts. The `floxify` skill sets Python up as a venv that the on-activate hook
+fills with pip, which exists only in an activated dev shell. Neither mentions
+run mode, `runtime-packages` or catalog Python libraries. An agent following
+them lands where this repo did: production in dev mode.

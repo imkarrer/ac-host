@@ -1,0 +1,6 @@
+.flox/run/
+.flox/cache/
+.flox/lib/
+.flox/log/
+result*
+poetry.lock

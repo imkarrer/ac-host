@@ -1,0 +1,26 @@
+# Verbatim from https://flox.dev/docs/languages/python#poetry, with the
+# docs' placeholder "myproject" renamed to this app's script, "hello".
+schema-version = "1.18.0"
+
+[install]
+python3.pkg-path = "python3"
+python3.version = ">=3.12"
+poetry.pkg-path = "poetry"
+poetry.outputs = "all"
+
+[build.myproject]
+command = '''
+  # Install to a new virtualenv.
+  export POETRY_VIRTUALENVS_PATH=$out
+  export POETRY_VIRTUALENVS_IN_PROJECT=false
+  export POETRY_VIRTUALENVS_OPTIONS_NO_PIP=true
+  poetry install
+
+  # Symlink any executables from the virtualenv.
+  mkdir -p "${out}/bin"
+  cd $out/bin
+  ln -s ../*/bin/hello .
+'''
+runtime-packages = [
+  "python3",
+]
